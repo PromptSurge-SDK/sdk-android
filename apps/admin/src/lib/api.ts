@@ -69,7 +69,7 @@ export function login(email: string, password: string): Promise<Session> {
 }
 
 export function logout(token: string): Promise<void> {
-  return apiFetch('/admin/logout', { method: 'POST', token });
+  return apiFetch('/admin/logout', { method: 'POST', token, body: '{}' });
 }
 
 export function getMe(token: string): Promise<Developer> {
