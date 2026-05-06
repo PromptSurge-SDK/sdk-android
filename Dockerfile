@@ -23,9 +23,9 @@ COPY tsconfig.base.json ./
 COPY packages/shared-types ./packages/shared-types
 COPY apps/api ./apps/api
 RUN pnpm --filter @promptsurge/shared-types build
-RUN pnpm --filter api build
-# Generate Prisma client targeting linux-musl (alpine)
+# Generate Prisma client before tsc so @prisma/client types are available
 RUN cd apps/api && npx prisma generate
+RUN pnpm --filter api build
 
 # ── runtime ───────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runtime
