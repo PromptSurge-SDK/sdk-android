@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 # Repo root Dockerfile — builds apps/api for production.
-# Docker context must be the repo root (default when fly.toml is at root).
+# Uses node:20-slim (Debian) throughout so Prisma's OpenSSL dependency is satisfied.
 
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -13,7 +13,6 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared-types/package.json ./packages/shared-types/
-# Install everything (including devDeps for build step)
 RUN pnpm install --frozen-lockfile --filter api...
 
 # ── build ─────────────────────────────────────────────────────────────────────
@@ -28,10 +27,9 @@ RUN cd apps/api && npx prisma generate
 RUN pnpm --filter api build
 
 # ── runtime ───────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:20-slim AS runtime
 WORKDIR /app
 
-# Copy only what's needed to run
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
@@ -46,5 +44,5 @@ EXPOSE 8080
 
 WORKDIR /app/apps/api
 
-# Apply pending migrations, then start
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Migrations run via fly.toml [deploy] release_command before machines start
+CMD ["node", "dist/index.js"]
