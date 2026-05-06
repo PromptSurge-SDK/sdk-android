@@ -28,6 +28,7 @@ RUN pnpm --filter api build
 
 # ── runtime ───────────────────────────────────────────────────────────────────
 FROM node:20-slim AS runtime
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
