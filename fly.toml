@@ -1,0 +1,30 @@
+# fly.toml — PromptSurge API on Fly.io
+# App name is set when you run `fly launch` and will be written here automatically.
+# This file is checked in; keep secrets in `fly secrets set`, never here.
+
+app = "promptsurge-api"
+primary_region = "iad"   # Washington DC — change to whichever region is closest to your Supabase project
+
+[build]
+  # Dockerfile is at repo root
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -1,0 +1,103 @@
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Developer {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  apps     App[]
+  sessions Session[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  developerId String
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@index([developerId])
+}
+
+model App {
+  id          String   @id @default(cuid())
+  developerId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  developer Developer    @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  events    Event[]
+  prompts   PromptText[]
+  apiKeys   ApiKey[]
+
+  @@index([developerId])
+}
+
+/// Per-app API key. `revokedAt` supports a 7-day grace period:
+///   - `null` → active.
+///   - past timestamp → key invalid (ignore in lookups).
+///   - future timestamp → still valid until that moment, used during rotation.
+model ApiKey {
+  id        String    @id @default(cuid())
+  appId     String
+  key       String    @unique
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([key])
+}
+
+model PromptText {
+  id          String   @id @default(cuid())
+  appId       String?
+  locale      String
+  title       String
+  body        String
+  ctaConfirm  String
+  ctaDismiss  String
+  createdAt   DateTime @default(now())
+
+  app App? @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, locale])
+  @@index([locale])
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  appId          String
+  eventType      String
+  eventId        String   @unique
+  timestamp      DateTime
+  sessionId      String
+  deviceId       String
+  appVersion     String
+  sdkVersion     String
+  locale         String
+  resolvedLocale String?
+  platform       String
+  payload        Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, eventType, timestamp])
+  @@index([appId, deviceId, timestamp])
+  @@index([appId, resolvedLocale, timestamp])
+}

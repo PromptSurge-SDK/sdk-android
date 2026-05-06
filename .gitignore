@@ -1,0 +1,38 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.DS_Store
+
+# Env — never commit real secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.local.example
+
+# Allow *.local files that are not .env
+# (e.g., tsconfig.tsbuildinfo) — covered by the .env line above
+
+# Android
+*.iml
+.gradle/
+local.properties
+/.idea
+/captures
+.externalNativeBuild/
+.cxx/
+*.keystore
+!debug.keystore
+build/
+
+# NOTE: prisma/migrations is intentionally NOT ignored — migrations must be
+# committed so `prisma migrate deploy` works on the server.
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log
+
+# Playwright
+apps/admin/playwright-report/
+apps/admin/test-results/

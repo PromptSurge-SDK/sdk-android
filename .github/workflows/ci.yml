@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # ── TypeScript / Node.js jobs ─────────────────────────────────────────────
+  ts-lint-typecheck-test:
+    name: TS — lint · typecheck · test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all TS packages)
+        run: pnpm -r typecheck
+
+      - name: Lint (all TS packages)
+        run: pnpm -r lint
+
+      - name: Test (all TS packages)
+        run: pnpm -r test
+
+  # ── Android jobs ──────────────────────────────────────────────────────────
+  android-build-test:
+    name: Android — build · test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('packages/sdk-android/**/*.gradle*', 'packages/sdk-android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Make gradlew executable
+        run: chmod +x packages/sdk-android/gradlew
+
+      - name: Run Android unit tests
+        run: |
+          cd packages/sdk-android
+          ./gradlew :sdk-android:test
+
+      - name: Build SDK release AAR
+        run: |
+          cd packages/sdk-android
+          ./gradlew :sdk-android:assembleRelease
+
+      - name: Build Sample App debug APK
+        run: |
+          cd packages/sdk-android
+          ./gradlew :sample-app-android:assembleDebug
