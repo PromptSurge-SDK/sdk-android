@@ -2,8 +2,8 @@
 # App name is set when you run `fly launch` and will be written here automatically.
 # This file is checked in; keep secrets in `fly secrets set`, never here.
 
-app = "promptsurge-api"
-primary_region = "iad"   # Washington DC — change to whichever region is closest to your Supabase project
+app = "promptsurge"
+primary_region = "iad"
 
 [build]
   # Dockerfile is at repo root

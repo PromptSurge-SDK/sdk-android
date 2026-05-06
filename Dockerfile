@@ -19,6 +19,7 @@ RUN pnpm install --frozen-lockfile --filter api...
 # ── build ─────────────────────────────────────────────────────────────────────
 FROM install AS build
 WORKDIR /app
+COPY tsconfig.base.json ./
 COPY packages/shared-types ./packages/shared-types
 COPY apps/api ./apps/api
 RUN pnpm --filter @promptsurge/shared-types build
