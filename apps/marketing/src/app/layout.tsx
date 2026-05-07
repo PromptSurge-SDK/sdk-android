@@ -1,11 +1,19 @@
 import type { Metadata } from 'next';
+import { DM_Sans } from 'next/font/google';
 import './globals.css';
 import { ADMIN_URL } from '@/lib/constants';
+import { BrandLockup } from '@/components/SurgeMark';
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'PromptSurge — Turn app users into reviewers',
   description:
-    'PromptSurge helps mobile developers grow App Store and Google Play ratings through AI-crafted, Apple-compliant in-app review prompts. Integrates in minutes.',
+    'PromptSurge helps mobile developers grow App Store and Google Play ratings through AI-crafted, Apple-compliant in-app review prompts. Integrates in one day.',
   metadataBase: new URL('https://promptsurge.me'),
   openGraph: {
     title: 'PromptSurge — Turn app users into reviewers',
@@ -23,7 +31,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={dmSans.variable}>
       <head>
         {/* Plausible Analytics — privacy-friendly, no cookies */}
         <script
@@ -32,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           src="https://plausible.io/js/script.js"
         />
       </head>
-      <body className="bg-white text-gray-900 antialiased">
+      <body className="bg-white font-sans text-gray-900 antialiased">
         <Nav />
         {children}
         <Footer />
@@ -45,13 +53,8 @@ function Nav() {
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-        <a href="/" className="flex items-center gap-2 font-bold text-brand-700 text-lg">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-            <rect width="28" height="28" rx="7" fill="#0d9488" />
-            <path d="M7 14 L14 7 L21 14 L14 21 Z" fill="white" opacity="0.9" />
-            <path d="M14 10 L18 14 L14 18 L10 14 Z" fill="#0d9488" />
-          </svg>
-          PromptSurge
+        <a href="/" aria-label="PromptSurge home">
+          <BrandLockup size="nav" />
         </a>
         <nav className="hidden items-center gap-6 text-sm font-medium text-gray-600 sm:flex">
           <a href="/#how-it-works" className="hover:text-brand-700 transition-colors">How it works</a>
@@ -83,8 +86,8 @@ function Footer() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
-            <p className="font-bold text-brand-700">PromptSurge</p>
-            <p className="mt-2 text-sm text-gray-500">
+            <BrandLockup size="nav" />
+            <p className="mt-3 text-sm text-gray-500">
               AI-powered review prompts for Android and iOS apps.
             </p>
           </div>
