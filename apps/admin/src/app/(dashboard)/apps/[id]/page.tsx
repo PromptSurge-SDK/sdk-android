@@ -17,12 +17,16 @@ export default async function AppDetailPage({ params }: { params: { id: string }
     app = await getApp(token, params.id);
   } catch (e: unknown) {
     const status = (e as { status?: number }).status;
+    console.error('[AppDetailPage] getApp failed:', { appId: params.id, status, error: String(e) });
     if (status === 404) notFound();
     redirect('/login');
   }
 
   // Fetch subscription — non-fatal if it fails (gracefully degrades)
-  const subscription = await getSubscription(token, params.id).catch(() => null);
+  const subscription = await getSubscription(token, params.id).catch((e: unknown) => {
+    console.error('[AppDetailPage] getSubscription failed:', { appId: params.id, error: String(e) });
+    return null;
+  });
 
   const activeKey = app.activeKeys.find((k) => !k.revokedAt);
   const gracePeriodKey = app.activeKeys.find((k) => k.revokedAt);

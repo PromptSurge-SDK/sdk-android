@@ -20,6 +20,7 @@ export default async function AppLayout({ children, params }: Props) {
     appName = app.name;
   } catch (e: unknown) {
     const status = (e as { status?: number }).status;
+    console.error('[AppLayout] getApp failed:', { appId: params.id, status, error: String(e) });
     if (status === 404) notFound();
     redirect('/login');
   }
