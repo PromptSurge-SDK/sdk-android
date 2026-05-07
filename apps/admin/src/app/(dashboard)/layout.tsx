@@ -12,8 +12,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   try {
     const me = await getMe(token);
     email = me.email;
-  } catch (e: unknown) {
-    console.error('[DashboardLayout] getMe failed:', String(e));
+  } catch {
     redirect('/login');
   }
 

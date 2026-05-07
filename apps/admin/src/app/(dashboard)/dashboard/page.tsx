@@ -172,19 +172,13 @@ function AppCard({ app }: { app: AppSummary }) {
       <div className="mt-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {app.playStoreUrl && (
-            <span
-              onClick={(e) => e.preventDefault()}
-              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-50"
-            >
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
               <PlayStoreIcon className="h-3 w-3 text-green-600" />
               Play
             </span>
           )}
           {app.appStoreUrl && (
-            <span
-              onClick={(e) => e.preventDefault()}
-              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-50"
-            >
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
               <AppStoreIcon className="h-3 w-3 text-blue-500" />
               App Store
             </span>
