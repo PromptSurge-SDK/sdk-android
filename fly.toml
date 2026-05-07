@@ -9,6 +9,9 @@ primary_region = "iad"
   # Dockerfile is at repo root
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "cd /app/apps/api && npx prisma migrate deploy"
+
 [env]
   NODE_ENV = "production"
   PORT = "8080"
