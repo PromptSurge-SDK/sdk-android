@@ -78,6 +78,55 @@ function RatingPill({
   );
 }
 
+type SdkStatus = 'active' | 'partial' | 'awaiting' | 'disconnected';
+
+function getSdkStatus(app: AppSummary): SdkStatus {
+  const hasEvents = app.eventCount > 0;
+  const storeCount = (app.playStoreUrl ? 1 : 0) + (app.appStoreUrl ? 1 : 0);
+  if (hasEvents && storeCount >= 2) return 'active';
+  if (hasEvents && storeCount === 1) return 'partial';
+  if (hasEvents) return 'active'; // events but no stores yet — treat as active
+  if (storeCount > 0) return 'awaiting';
+  return 'disconnected';
+}
+
+function SdkStatusIndicator({ app }: { app: AppSummary }) {
+  const status = getSdkStatus(app);
+  const storeCount = (app.playStoreUrl ? 1 : 0) + (app.appStoreUrl ? 1 : 0);
+
+  const config: Record<SdkStatus, { dot: string; label: string; text: string }> = {
+    active: {
+      dot: 'bg-green-500',
+      label: 'SDK active',
+      text: 'text-green-700',
+    },
+    partial: {
+      dot: 'bg-amber-400',
+      label: 'SDK active · 1 store',
+      text: 'text-amber-700',
+    },
+    awaiting: {
+      dot: 'bg-amber-400 animate-pulse',
+      label: 'Awaiting first event',
+      text: 'text-amber-700',
+    },
+    disconnected: {
+      dot: 'bg-red-400',
+      label: storeCount === 0 ? 'SDK not connected' : 'Awaiting SDK',
+      text: 'text-red-600',
+    },
+  };
+
+  const { dot, label, text } = config[status];
+
+  return (
+    <div className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot}`} aria-hidden />
+      {label}
+    </div>
+  );
+}
+
 function AppCard({ app }: { app: AppSummary }) {
   const hasPlay = app.playRating != null;
   const hasAppStore = app.appStoreRating != null;
@@ -144,6 +193,11 @@ function AppCard({ app }: { app: AppSummary }) {
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
           {app.eventCount.toLocaleString()} events
         </span>
+      </div>
+
+      {/* SDK status indicator */}
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <SdkStatusIndicator app={app} />
       </div>
     </Link>
   );

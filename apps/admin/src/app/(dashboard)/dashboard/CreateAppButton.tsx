@@ -61,6 +61,40 @@ function isValidStoreUrl(url: string, platform: 'play' | 'appstore'): boolean {
   }
 }
 
+/**
+ * Normalize store URLs to the canonical English (US) variant so that locale
+ * params don't leak into scraping or stored URLs.
+ *
+ * Play Store: strips everything except `id`, forces hl=en&gl=US
+ *   https://play.google.com/store/apps/details?id=com.foo&hl=fr-FR&gl=FR
+ *   → https://play.google.com/store/apps/details?id=com.foo&hl=en&gl=US
+ *
+ * App Store: replaces the country-code path segment with "us"
+ *   https://apps.apple.com/fr/app/name/id123
+ *   → https://apps.apple.com/us/app/name/id123
+ */
+function normalizeStoreUrl(url: string, platform: 'play' | 'appstore'): string {
+  try {
+    if (platform === 'play') {
+      const parsed = new URL(url);
+      const packageId = parsed.searchParams.get('id');
+      if (!packageId) return url;
+      return `https://play.google.com/store/apps/details?id=${encodeURIComponent(packageId)}&hl=en&gl=US`;
+    } else {
+      // Replace the locale segment right after the hostname:
+      // https://apps.apple.com/{locale}/app/... → https://apps.apple.com/us/app/...
+      // Also handles itunes.apple.com links by converting to apps.apple.com
+      const parsed = new URL(url);
+      const hostname = 'apps.apple.com';
+      // pathname: /{locale}/app/{name}/id{appId}  or  /{locale}/app/id{appId}
+      const normalized = parsed.pathname.replace(/^\/[a-z]{2}(-[a-z]{2,4})?(?=\/)/i, '/us');
+      return `https://${hostname}${normalized}`;
+    }
+  } catch {
+    return url;
+  }
+}
+
 async function fetchStoreMeta(url: string): Promise<StoreMetaResult | null> {
   try {
     const res = await fetch(`/api/store-meta?url=${encodeURIComponent(url)}`);
@@ -180,6 +214,7 @@ export function CreateAppButton() {
   const [appName, setAppName] = useState('');
   const [copied, setCopied] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [notLiveYet, setNotLiveYet] = useState(false);
 
   // Store meta state
   const [playMeta, setPlayMeta] = useState<StoreMetaResult | null>(null);
@@ -211,16 +246,20 @@ export function CreateAppButton() {
     setPlayMeta(null);
     setAppStoreMeta(null);
     setAutoFilledName(false);
+    setNotLiveYet(false);
     setOpen(true);
   }
 
   const handlePlayUrlChange = useCallback(
-    (url: string) => {
+    (rawUrl: string) => {
       if (playDebounceRef.current) clearTimeout(playDebounceRef.current);
-      if (!isValidStoreUrl(url, 'play')) {
+      if (!isValidStoreUrl(rawUrl, 'play')) {
         setPlayMeta(null);
         return;
       }
+      const url = normalizeStoreUrl(rawUrl, 'play');
+      // Silently update the field to the canonical URL
+      if (url !== rawUrl) setValue('playStoreUrl', url, { shouldValidate: false });
       playDebounceRef.current = setTimeout(async () => {
         setPlayLoading(true);
         try {
@@ -239,12 +278,14 @@ export function CreateAppButton() {
   );
 
   const handleAppStoreUrlChange = useCallback(
-    (url: string) => {
+    (rawUrl: string) => {
       if (appStoreDebounceRef.current) clearTimeout(appStoreDebounceRef.current);
-      if (!isValidStoreUrl(url, 'appstore')) {
+      if (!isValidStoreUrl(rawUrl, 'appstore')) {
         setAppStoreMeta(null);
         return;
       }
+      const url = normalizeStoreUrl(rawUrl, 'appstore');
+      if (url !== rawUrl) setValue('appStoreUrl', url, { shouldValidate: false });
       appStoreDebounceRef.current = setTimeout(async () => {
         setAppStoreLoading(true);
         try {
@@ -340,61 +381,87 @@ export function CreateAppButton() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" data-testid="create-app-form">
-                {/* URL fields */}
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="play-store-url">Google Play URL</Label>
-                    <div className="relative">
-                      <Input
-                        id="play-store-url"
-                        placeholder="https://play.google.com/store/apps/details?id=com.example.app"
-                        {...register('playStoreUrl', {
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            handlePlayUrlChange(e.target.value),
-                        })}
-                        onBlur={(e) => handlePlayUrlChange(e.target.value)}
-                      />
-                      {playLoading && (
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                        </span>
-                      )}
-                    </div>
-                    {errors.playStoreUrl && (
-                      <p className="text-xs text-red-600">{errors.playStoreUrl.message}</p>
-                    )}
-                    {playMeta && !playMeta.error && <MetaChip meta={playMeta} platform="play" />}
-                  </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="app-store-url">Apple App Store URL</Label>
-                    <div className="relative">
-                      <Input
-                        id="app-store-url"
-                        placeholder="https://apps.apple.com/app/name/id123456789"
-                        {...register('appStoreUrl', {
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            handleAppStoreUrlChange(e.target.value),
-                        })}
-                        onBlur={(e) => handleAppStoreUrlChange(e.target.value)}
-                      />
-                      {appStoreLoading && (
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                        </span>
+                {/* "Not live yet?" toggle */}
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 hover:bg-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 accent-brand-600 flex-shrink-0"
+                    checked={notLiveYet}
+                    onChange={(e) => {
+                      setNotLiveYet(e.target.checked);
+                      if (e.target.checked) {
+                        // Clear store URL fields and any fetched meta
+                        setValue('playStoreUrl', '');
+                        setValue('appStoreUrl', '');
+                        setPlayMeta(null);
+                        setAppStoreMeta(null);
+                      }
+                    }}
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-medium">App not live on stores yet</span>
+                    <span className="ml-1 text-gray-500">— skip store URLs for now</span>
+                  </span>
+                </label>
+
+                {/* URL fields — hidden when "not live yet" */}
+                {!notLiveYet && (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="play-store-url">Google Play URL</Label>
+                      <div className="relative">
+                        <Input
+                          id="play-store-url"
+                          placeholder="https://play.google.com/store/apps/details?id=com.example.app"
+                          {...register('playStoreUrl', {
+                            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                              handlePlayUrlChange(e.target.value),
+                          })}
+                          onBlur={(e) => handlePlayUrlChange(e.target.value)}
+                        />
+                        {playLoading && (
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </span>
+                        )}
+                      </div>
+                      {errors.playStoreUrl && (
+                        <p className="text-xs text-red-600">{errors.playStoreUrl.message}</p>
+                      )}
+                      {playMeta && !playMeta.error && <MetaChip meta={playMeta} platform="play" />}
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="app-store-url">Apple App Store URL</Label>
+                      <div className="relative">
+                        <Input
+                          id="app-store-url"
+                          placeholder="https://apps.apple.com/app/name/id123456789"
+                          {...register('appStoreUrl', {
+                            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                              handleAppStoreUrlChange(e.target.value),
+                          })}
+                          onBlur={(e) => handleAppStoreUrlChange(e.target.value)}
+                        />
+                        {appStoreLoading && (
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </span>
+                        )}
+                      </div>
+                      {errors.appStoreUrl && (
+                        <p className="text-xs text-red-600">{errors.appStoreUrl.message}</p>
+                      )}
+                      {appStoreMeta && !appStoreMeta.error && (
+                        <MetaChip meta={appStoreMeta} platform="appstore" />
                       )}
                     </div>
-                    {errors.appStoreUrl && (
-                      <p className="text-xs text-red-600">{errors.appStoreUrl.message}</p>
-                    )}
-                    {appStoreMeta && !appStoreMeta.error && (
-                      <MetaChip meta={appStoreMeta} platform="appstore" />
-                    )}
                   </div>
-                </div>
+                )}
 
                 {/* Combined preview */}
-                {showPreview && (
+                {showPreview && !notLiveYet && (
                   <CombinedPreview
                     playMeta={playMeta}
                     appStoreMeta={appStoreMeta}
@@ -404,15 +471,22 @@ export function CreateAppButton() {
 
                 {/* App name */}
                 <div className="space-y-1">
-                  <Label htmlFor="app-name">App name</Label>
+                  <Label htmlFor="app-name">
+                    {notLiveYet ? 'Placeholder name' : 'App name'}
+                  </Label>
                   <Input
                     id="app-name"
-                    placeholder="My awesome app"
-                    autoFocus={!showPreview}
+                    placeholder={notLiveYet ? 'e.g. My App (beta)' : 'My awesome app'}
+                    autoFocus={notLiveYet || !showPreview}
                     {...register('name', {
                       onChange: () => setAutoFilledName(false),
                     })}
                   />
+                  {notLiveYet && (
+                    <p className="text-xs text-gray-500">
+                      You can add store URLs later from the app&apos;s Settings page once it&apos;s live.
+                    </p>
+                  )}
                   {errors.name && <p className="text-xs text-red-600">{errors.name.message}</p>}
                 </div>
 

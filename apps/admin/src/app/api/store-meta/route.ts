@@ -17,13 +17,28 @@ interface StoreMetaError {
   message: string;
 }
 
-async function fetchPlayStoreMeta(url: string): Promise<StoreMetaResult> {
+/** Strip locale params and force the canonical English (US) URL. */
+function normalizePlayUrl(url: string): string {
   const parsed = new URL(url);
+  const packageId = parsed.searchParams.get('id');
+  if (!packageId) throw new Error('Missing id parameter in Play Store URL');
+  return `https://play.google.com/store/apps/details?id=${encodeURIComponent(packageId)}&hl=en&gl=US`;
+}
+
+function normalizeAppStoreUrl(url: string): string {
+  const parsed = new URL(url);
+  const normalized = parsed.pathname.replace(/^\/[a-z]{2}(-[a-z]{2,4})?(?=\/)/i, '/us');
+  return `https://apps.apple.com${normalized}`;
+}
+
+async function fetchPlayStoreMeta(url: string): Promise<StoreMetaResult> {
+  const canonicalUrl = normalizePlayUrl(url);
+  const parsed = new URL(canonicalUrl);
   const packageId = parsed.searchParams.get('id');
   if (!packageId) throw new Error('Missing id parameter in Play Store URL');
 
   const resp = await fetch(
-    `https://play.google.com/store/apps/details?id=${encodeURIComponent(packageId)}&hl=en&gl=US`,
+    canonicalUrl,
     {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
