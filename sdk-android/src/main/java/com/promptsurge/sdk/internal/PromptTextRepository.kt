@@ -136,7 +136,8 @@ internal class PromptTextRepository internal constructor(
         val body = prefs.getString(KEY_BODY, null) ?: return null
         val ctaConfirm = prefs.getString(KEY_CTA_CONFIRM, null) ?: return null
         val ctaDismiss = prefs.getString(KEY_CTA_DISMISS, null) ?: return null
-        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss)
+        val imageUrl = prefs.getString(KEY_IMAGE_URL, null)
+        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl)
     }
 
     private fun writeCache(requestedLocale: String, text: PromptText, now: Long) {
@@ -147,6 +148,7 @@ internal class PromptTextRepository internal constructor(
             putString(KEY_BODY, text.body)
             putString(KEY_CTA_CONFIRM, text.ctaConfirm)
             putString(KEY_CTA_DISMISS, text.ctaDismiss)
+            if (text.imageUrl != null) putString(KEY_IMAGE_URL, text.imageUrl) else remove(KEY_IMAGE_URL)
             putLong(KEY_CACHED_AT, now)
             apply()
         }
@@ -161,6 +163,7 @@ internal class PromptTextRepository internal constructor(
             body = parsed.body,
             ctaConfirm = parsed.ctaConfirm,
             ctaDismiss = parsed.ctaDismiss,
+            imageUrl = parsed.imageUrl,
         )
     }
 
@@ -177,6 +180,7 @@ internal class PromptTextRepository internal constructor(
         val body: String,
         val ctaConfirm: String,
         val ctaDismiss: String,
+        val imageUrl: String? = null,
     )
 
     private data class CachedPrompt(
@@ -200,6 +204,7 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_CTA_CONFIRM = "cta_confirm"
         private const val KEY_CTA_DISMISS = "cta_dismiss"
         private const val KEY_CACHED_AT = "cached_at"
+        private const val KEY_IMAGE_URL = "image_url"
 
         internal const val DEFAULT_TTL_MS: Long = 24L * 60 * 60 * 1000
 

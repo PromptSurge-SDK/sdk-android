@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.lifecycle.process)
     implementation(libs.lifecycle.common)
+    implementation("io.coil-kt:coil:2.6.0")
     api(libs.play.review.ktx)
 
     testImplementation(libs.junit)

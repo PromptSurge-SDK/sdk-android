@@ -22,12 +22,14 @@ internal object PromptDefaults {
         body = BODY,
         ctaConfirm = CTA_CONFIRM,
         ctaDismiss = CTA_DISMISS,
+        imageUrl = null,
     )
 }
 
 /**
  * Resolved pre-prompt copy for a given locale. The `locale` field reflects what the server
  * actually served (after fallback resolution), not what the client asked for.
+ * `imageUrl` is optional — when non-null the dialog renders it as a header image above the title.
  */
 internal data class PromptText(
     val locale: String,
@@ -35,4 +37,5 @@ internal data class PromptText(
     val body: String,
     val ctaConfirm: String,
     val ctaDismiss: String,
+    val imageUrl: String? = null,
 )
