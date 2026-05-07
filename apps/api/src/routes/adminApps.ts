@@ -53,6 +53,47 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
     const dev = request.developer!;
 
+    // ── App-creation rate limits ────────────────────────────────────────────
+    // Limits are per developer account (the creator), not per org.
+    // To bypass for a specific developer, add their ID (comma-separated) to
+    // the APP_RATE_LIMIT_BYPASS env var, e.g. "dev_abc123,dev_xyz789".
+    const bypassIds = (process.env.APP_RATE_LIMIT_BYPASS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (!bypassIds.includes(dev.id)) {
+      const DAILY_LIMIT   = parseInt(process.env.APP_DAILY_LIMIT   ?? '5',  10);
+      const MONTHLY_LIMIT = parseInt(process.env.APP_MONTHLY_LIMIT  ?? '20', 10);
+
+      const now = new Date();
+      const startOfDay = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+      ));
+      const startOfMonth = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), 1,
+      ));
+
+      const [dailyCount, monthlyCount] = await Promise.all([
+        prisma.app.count({ where: { developerId: dev.id, createdAt: { gte: startOfDay } } }),
+        prisma.app.count({ where: { developerId: dev.id, createdAt: { gte: startOfMonth } } }),
+      ]);
+
+      if (dailyCount >= DAILY_LIMIT) {
+        return reply.code(429).header('Retry-After', '86400').send({
+          error: 'rate_limit_exceeded',
+          message: `You can create at most ${DAILY_LIMIT} apps per day. Try again tomorrow.`,
+        });
+      }
+      if (monthlyCount >= MONTHLY_LIMIT) {
+        return reply.code(429).send({
+          error: 'rate_limit_exceeded',
+          message: `You can create at most ${MONTHLY_LIMIT} apps per month. Contact support if you need more.`,
+        });
+      }
+    }
+    // ── End rate limits ─────────────────────────────────────────────────────
+
     // Ensure developer has an org (auto-create if needed)
     const org = await getOrCreateDeveloperOrg(dev.id);
 
