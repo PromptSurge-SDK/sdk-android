@@ -28,6 +28,13 @@ export async function registerPromptsRoute(app: FastifyInstance): Promise<void> 
     const sessionId = String(q.sessionId ?? '');
     const language = requestedLocale.split(/[-_]/)[0]?.toLowerCase() ?? 'en';
 
+    // ─── Soft-delete guard ────────────────────────────────────────────────────
+    // API key stays valid after soft-delete so the native rating flow still
+    // fires, but we return app_deleted so the SDK suppresses our pre-prompt.
+    if (appRow.deletedAt) {
+      return reply.code(404).send({ error: 'app_deleted' });
+    }
+
     // ─── Impression gate ──────────────────────────────────────────────────────
     const periodStart = currentPeriodStart(appRow);
     const impressions = await getMonthlyImpressions(appRow.id, periodStart);

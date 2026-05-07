@@ -157,6 +157,7 @@ model App {
   storeMetaUpdatedAt   DateTime?
 
   organizationId String?
+  deletedAt      DateTime?              // set on soft-delete; null = active
 
   organization        Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 

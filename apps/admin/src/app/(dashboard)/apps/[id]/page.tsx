@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RotateKeyButton } from './RotateKeyButton';
 import { SubscriptionCard } from './SubscriptionCard';
+import { DeleteAppButton } from '@/components/DeleteAppButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,15 @@ export default async function AppDetailPage({ params }: { params: { id: string }
 
   return (
     <div>
-      <h1 className="mb-6 text-xl font-semibold text-gray-900">Overview</h1>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <h1 className="text-xl font-semibold text-gray-900">Overview</h1>
+        <DeleteAppButton
+          appId={app.id}
+          appName={app.name}
+          variant="full"
+          redirectAfterDelete="/dashboard"
+        />
+      </div>
 
       {subscription && (
         <div className="mb-4">

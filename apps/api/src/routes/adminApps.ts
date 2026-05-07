@@ -46,6 +46,52 @@ const PatchStoreBody = z.object({
     .optional(),
 });
 
+// ─── Deletion-state helpers ───────────────────────────────────────────────────
+
+/** App has sent at least one event in the last 30 days (SDK still embedded). */
+function isSdkActive(recentEventCount: number): boolean {
+  return recentEventCount > 0;
+}
+
+/**
+ * Whether a soft-deleted app is still within its 90-day restoration window
+ * (counted from the moment the developer clicked delete, not from last event).
+ */
+function isWithin90DayWindow(deletedAt: Date): boolean {
+  const MS_90_DAYS = 90 * 24 * 60 * 60 * 1000;
+  return Date.now() - deletedAt.getTime() < MS_90_DAYS;
+}
+
+/** Active subscription OR within 30-day grace after cancellation. */
+function isSubProtected(
+  tier: string,
+  status: string,
+  billingPeriodEnd: Date | null,
+): boolean {
+  if (tier !== 'indie' && status === 'active') return true;
+  if (status === 'cancelled' && billingPeriodEnd) {
+    const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
+    return Date.now() - billingPeriodEnd.getTime() < MS_30_DAYS;
+  }
+  return false;
+}
+
+/** A purgeable app can be permanently hard-deleted by the developer. */
+function isPurgeable(
+  deletedAt: Date | null,
+  recentEventCount: number,
+  tier: string,
+  status: string,
+  billingPeriodEnd: Date | null,
+): boolean {
+  if (!deletedAt) return false;
+  return (
+    !isSdkActive(recentEventCount) &&
+    !isWithin90DayWindow(deletedAt) &&
+    !isSubProtected(tier, status, billingPeriodEnd)
+  );
+}
+
 export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<void> {
   // POST /admin/apps — create a new app (auto-links to developer's org)
   app.post('/admin/apps', { preHandler: requireDeveloper }, async (request, reply) => {
@@ -126,9 +172,11 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
     });
   });
 
-  // GET /admin/apps — list all apps the developer can access (own + org memberships)
+  // GET /admin/apps — list all apps the developer can access (active + soft-deleted)
   app.get('/admin/apps', { preHandler: requireDeveloper }, async (request, reply) => {
     const dev = request.developer!;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
     const apps = await prisma.app.findMany({
       where: {
         OR: [
@@ -144,26 +192,67 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
         id: true,
         name: true,
         createdAt: true,
-        _count: { select: { apiKeys: true, events: true } },
+        deletedAt: true,
+        subscriptionTier: true,
+        subscriptionStatus: true,
+        billingPeriodEnd: true,
+        lsSubscriptionId: true,
+        _count: {
+          select: {
+            apiKeys: true,
+            events: true,
+            // Events in the last 30 days — proxy for "SDK still active"
+            // Prisma 5 supports filtered relation counts in _count.select
+          },
+        },
         ...storeMetaSelect,
       },
     });
+
+    // Fetch recent-event counts separately (filtered count via raw aggregate)
+    const appIds = apps.map((a) => a.id);
+    const recentCounts = appIds.length > 0
+      ? await prisma.event.groupBy({
+          by: ['appId'],
+          where: { appId: { in: appIds }, createdAt: { gte: thirtyDaysAgo } },
+          _count: { _all: true },
+        })
+      : [];
+    const recentCountMap = new Map(recentCounts.map((r) => [r.appId, r._count._all]));
+
     return reply.send({
-      apps: apps.map((a) => ({
-        id: a.id,
-        name: a.name,
-        createdAt: a.createdAt.toISOString(),
-        keyCount: a._count.apiKeys,
-        eventCount: a._count.events,
-        playStoreUrl: a.playStoreUrl,
-        appStoreUrl: a.appStoreUrl,
-        storeIconUrl: a.storeIconUrl,
-        publisherName: a.publisherName,
-        playRating: a.playRating,
-        appStoreRating: a.appStoreRating,
-        playReviewCount: a.playReviewCount,
-        appStoreReviewCount: a.appStoreReviewCount,
-      })),
+      apps: apps.map((a) => {
+        const recentEvents = recentCountMap.get(a.id) ?? 0;
+        const sdkActive = isSdkActive(recentEvents);
+        const everPaid = a.lsSubscriptionId !== null;
+        const purgeable = isPurgeable(
+          a.deletedAt,
+          recentEvents,
+          a.subscriptionTier,
+          a.subscriptionStatus,
+          a.billingPeriodEnd,
+        );
+
+        return {
+          id: a.id,
+          name: a.name,
+          createdAt: a.createdAt.toISOString(),
+          deletedAt: a.deletedAt?.toISOString() ?? null,
+          keyCount: a._count.apiKeys,
+          eventCount: a._count.events,
+          sdkActive,
+          purgeable,
+          everPaid,
+          playStoreUrl: a.playStoreUrl,
+          appStoreUrl: a.appStoreUrl,
+          storeIconUrl: a.storeIconUrl,
+          publisherName: a.publisherName,
+          playRating: a.playRating,
+          appStoreRating: a.appStoreRating,
+          playReviewCount: a.playReviewCount,
+          appStoreReviewCount: a.appStoreReviewCount,
+        };
+      }),
     });
   });
 
@@ -177,6 +266,7 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
         id: true,
         name: true,
         createdAt: true,
+        deletedAt: true,
         _count: { select: { apiKeys: true, events: true } },
         apiKeys: {
           where: { OR: [{ revokedAt: null }, { revokedAt: { gt: new Date() } }] },
@@ -191,6 +281,7 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
       id: found.id,
       name: found.name,
       createdAt: found.createdAt.toISOString(),
+      deletedAt: found.deletedAt?.toISOString() ?? null,
       keyCount: found._count.apiKeys,
       eventCount: found._count.events,
       activeKeys: found.apiKeys.map((k) => ({
@@ -274,5 +365,92 @@ export async function registerAdminAppsRoutes(app: FastifyInstance): Promise<voi
       revokedCount,
       gracePeriodDays: 7,
     });
+  });
+
+  // DELETE /admin/apps/:appId — soft-delete (or immediate hard-delete for brand-new zero-event apps)
+  app.delete('/admin/apps/:appId', { preHandler: requireDeveloper }, async (request, reply) => {
+    const { appId } = request.params as { appId: string };
+    const dev = request.developer!;
+
+    const owned = await assertAppAccess(appId, dev.id);
+    if (!owned) return reply.code(404).send({ error: 'app_not_found' });
+
+    // Already deleted
+    if (owned.deletedAt) return reply.code(409).send({ error: 'already_deleted' });
+
+    const eventCount = await prisma.event.count({ where: { appId } });
+
+    // Immediate hard-delete path: no events ever AND never had a paid subscription
+    if (eventCount === 0 && owned.lsSubscriptionId === null) {
+      await prisma.app.delete({ where: { id: appId } });
+      return reply.send({ deleted: true, immediate: true });
+    }
+
+    // Soft-delete path: set deletedAt
+    await prisma.app.update({ where: { id: appId }, data: { deletedAt: new Date() } });
+    return reply.send({ deleted: true, immediate: false });
+  });
+
+  // POST /admin/apps/:appId/restore — clear deletedAt to reinstate the app
+  app.post('/admin/apps/:appId/restore', { preHandler: requireDeveloper }, async (request, reply) => {
+    const { appId } = request.params as { appId: string };
+    const dev = request.developer!;
+
+    const owned = await assertAppAccess(appId, dev.id);
+    if (!owned) return reply.code(404).send({ error: 'app_not_found' });
+    if (!owned.deletedAt) return reply.code(409).send({ error: 'app_not_deleted' });
+
+    await prisma.app.update({ where: { id: appId }, data: { deletedAt: null } });
+    return reply.send({ ok: true });
+  });
+
+  // DELETE /admin/apps/:appId/permanent — hard-delete a soft-deleted, purgeable app
+  app.delete('/admin/apps/:appId/permanent', { preHandler: requireDeveloper }, async (request, reply) => {
+    const { appId } = request.params as { appId: string };
+    const dev = request.developer!;
+
+    const owned = await assertAppAccess(appId, dev.id);
+    if (!owned) return reply.code(404).send({ error: 'app_not_found' });
+    if (!owned.deletedAt) return reply.code(409).send({ error: 'app_not_deleted' });
+
+    // Permission check: previously-paid apps can only be permanently deleted by the org owner
+    if (owned.lsSubscriptionId !== null) {
+      const membership = await prisma.organizationMember.findFirst({
+        where: {
+          developerId: dev.id,
+          organizationId: owned.organizationId ?? undefined,
+        },
+      });
+      if (!membership || membership.role !== 'owner') {
+        return reply.code(403).send({
+          error: 'forbidden',
+          message: 'Only the org owner can permanently delete an app that had a paid subscription.',
+        });
+      }
+    }
+
+    // Verify the app is actually purgeable
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentEvents = await prisma.event.count({
+      where: { appId, createdAt: { gte: thirtyDaysAgo } },
+    });
+
+    const purgeable = isPurgeable(
+      owned.deletedAt,
+      recentEvents,
+      owned.subscriptionTier,
+      owned.subscriptionStatus,
+      owned.billingPeriodEnd,
+    );
+
+    if (!purgeable) {
+      return reply.code(409).send({
+        error: 'not_purgeable',
+        message: 'This app cannot be permanently deleted yet. It may still be within the 90-day window, have recent SDK activity, or have an active subscription.',
+      });
+    }
+
+    await prisma.app.delete({ where: { id: appId } });
+    return reply.send({ ok: true });
   });
 }

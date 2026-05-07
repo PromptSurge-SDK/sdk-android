@@ -179,14 +179,22 @@ export interface AppSummary extends StoreMetaFields {
   id: string;
   name: string;
   createdAt: string;
+  deletedAt: string | null;
   keyCount: number;
   eventCount: number;
+  /** True if the app has sent at least one event in the last 30 days. */
+  sdkActive: boolean;
+  /** True if the app is soft-deleted AND no longer protected by any restoration condition. */
+  purgeable: boolean;
+  /** True if the app was ever linked to a Lemon Squeezy subscription. */
+  everPaid: boolean;
 }
 
 export interface AppDetail extends StoreMetaFields {
   id: string;
   name: string;
   createdAt: string;
+  deletedAt: string | null;
   keyCount: number;
   eventCount: number;
   activeKeys: { id: string; createdAt: string; revokedAt: string | null }[];
@@ -231,6 +239,24 @@ export interface RotateKeyResult {
 
 export function rotateKey(token: string, appId: string): Promise<RotateKeyResult> {
   return apiFetch(`/admin/apps/${appId}/keys/rotate`, { method: 'POST', token });
+}
+
+export interface DeleteAppResult {
+  deleted: true;
+  /** true = immediately hard-deleted (no events, no sub); false = soft-deleted */
+  immediate: boolean;
+}
+
+export function deleteApp(token: string, appId: string): Promise<DeleteAppResult> {
+  return apiFetch(`/admin/apps/${appId}`, { method: 'DELETE', token, body: '{}' });
+}
+
+export function restoreApp(token: string, appId: string): Promise<{ ok: true }> {
+  return apiFetch(`/admin/apps/${appId}/restore`, { method: 'POST', token, body: '{}' });
+}
+
+export function permanentlyDeleteApp(token: string, appId: string): Promise<{ ok: true }> {
+  return apiFetch(`/admin/apps/${appId}/permanent`, { method: 'DELETE', token, body: '{}' });
 }
 
 // ─── Subscription ─────────────────────────────────────────────────────────────

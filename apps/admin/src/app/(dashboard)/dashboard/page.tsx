@@ -5,6 +5,8 @@ import { getApps } from '@/lib/api';
 import type { AppSummary } from '@/lib/api';
 import { getSessionToken } from '@/lib/session';
 import { CreateAppButton } from './CreateAppButton';
+import { DeleteAppButton } from '@/components/DeleteAppButton';
+import { DiscardedApps } from './DiscardedApps';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +87,7 @@ function getSdkStatus(app: AppSummary): SdkStatus {
   const storeCount = (app.playStoreUrl ? 1 : 0) + (app.appStoreUrl ? 1 : 0);
   if (hasEvents && storeCount >= 2) return 'active';
   if (hasEvents && storeCount === 1) return 'partial';
-  if (hasEvents) return 'active'; // events but no stores yet — treat as active
+  if (hasEvents) return 'active';
   if (storeCount > 0) return 'awaiting';
   return 'disconnected';
 }
@@ -133,67 +135,72 @@ function AppCard({ app }: { app: AppSummary }) {
   const hasRatings = hasPlay || hasAppStore;
 
   return (
-    <Link
-      href={`/apps/${app.id}`}
-      className="flex flex-col rounded-2xl border border-[var(--color-border,#e5e7eb)] bg-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
-    >
-      {/* Top row: icon + name + publisher */}
-      <div className="flex items-start gap-3">
-        <AppIcon app={app} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold text-gray-900">{app.name}</div>
-          {app.publisherName && (
-            <div className="truncate text-sm text-gray-500">{app.publisherName}</div>
-          )}
-        </div>
+    <div className="group relative flex flex-col rounded-2xl border border-[var(--color-border,#e5e7eb)] bg-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md">
+      {/* Delete button — top-right, only visible on hover */}
+      <div className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100">
+        <DeleteAppButton appId={app.id} appName={app.name} variant="icon" />
       </div>
 
-      {/* Ratings row */}
-      {hasRatings && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-          {hasPlay && (
-            <RatingPill
-              platform="play"
-              rating={app.playRating!}
-              reviewCount={app.playReviewCount}
-            />
-          )}
-          {hasAppStore && (
-            <RatingPill
-              platform="appstore"
-              rating={app.appStoreRating!}
-              reviewCount={app.appStoreReviewCount}
-            />
-          )}
+      {/* Card is a link; delete button stops propagation itself */}
+      <Link href={`/apps/${app.id}`} className="flex flex-col">
+        {/* Top row: icon + name + publisher */}
+        <div className="flex items-start gap-3">
+          <AppIcon app={app} />
+          <div className="min-w-0 flex-1 pr-6">
+            <div className="truncate font-semibold text-gray-900">{app.name}</div>
+            {app.publisherName && (
+              <div className="truncate text-sm text-gray-500">{app.publisherName}</div>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Bottom row: store links + event count */}
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {app.playStoreUrl && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
-              <PlayStoreIcon className="h-3 w-3 text-green-600" />
-              Play
-            </span>
-          )}
-          {app.appStoreUrl && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
-              <AppStoreIcon className="h-3 w-3 text-blue-500" />
-              App Store
-            </span>
-          )}
+        {/* Ratings row */}
+        {hasRatings && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+            {hasPlay && (
+              <RatingPill
+                platform="play"
+                rating={app.playRating!}
+                reviewCount={app.playReviewCount}
+              />
+            )}
+            {hasAppStore && (
+              <RatingPill
+                platform="appstore"
+                rating={app.appStoreRating!}
+                reviewCount={app.appStoreReviewCount}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Bottom row: store links + event count */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {app.playStoreUrl && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
+                <PlayStoreIcon className="h-3 w-3 text-green-600" />
+                Play
+              </span>
+            )}
+            {app.appStoreUrl && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
+                <AppStoreIcon className="h-3 w-3 text-blue-500" />
+                App Store
+              </span>
+            )}
+          </div>
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+            {app.eventCount.toLocaleString()} events
+          </span>
         </div>
-        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-          {app.eventCount.toLocaleString()} events
-        </span>
-      </div>
 
-      {/* SDK status indicator */}
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        <SdkStatusIndicator app={app} />
-      </div>
-    </Link>
+        {/* SDK status indicator */}
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <SdkStatusIndicator app={app} />
+        </div>
+      </Link>
+    </div>
   );
 }
 
@@ -208,19 +215,24 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
+  const activeApps = apps.filter((a) => !a.deletedAt);
+  const discardedApps = apps.filter((a) => !!a.deletedAt);
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Your apps</h1>
           <p className="text-sm text-gray-500">
-            {apps.length === 0 ? 'No apps yet' : `${apps.length} app${apps.length !== 1 ? 's' : ''}`}
+            {activeApps.length === 0
+              ? 'No apps yet'
+              : `${activeApps.length} app${activeApps.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <CreateAppButton />
       </div>
 
-      {apps.length === 0 ? (
+      {activeApps.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white py-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
             <svg className="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -235,11 +247,14 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {apps.map((app) => (
+          {activeApps.map((app) => (
             <AppCard key={app.id} app={app} />
           ))}
         </div>
       )}
+
+      {/* Discarded section */}
+      <DiscardedApps apps={discardedApps} />
     </div>
   );
 }
