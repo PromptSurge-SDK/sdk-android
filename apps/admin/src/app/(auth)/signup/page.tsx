@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { signup } from '@/lib/api';
+import { OAuthButtons } from '@/components/OAuthButtons';
+import { SurgeMark } from '@/components/SurgeMark';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -47,11 +49,11 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: 'var(--neutral-50)' }}>
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">
-            PS
+          <div className="mx-auto mb-3">
+            <SurgeMark size="auth" />
           </div>
           <CardTitle>Create your account</CardTitle>
           <CardDescription>Start managing your review prompts</CardDescription>
@@ -75,6 +77,18 @@ export default function SignupPage() {
               Create account
             </Button>
           </form>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-gray-400">
+              <span className="bg-white px-2">or sign up with</span>
+            </div>
+          </div>
+
+          <OAuthButtons action="login" next="/dashboard" />
+
           <p className="mt-4 text-center text-sm text-gray-500">
             Already have an account?{' '}
             <Link href="/login" className="text-brand-600 hover:underline">

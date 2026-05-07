@@ -14,6 +14,18 @@ export type LoginRequest = z.infer<typeof LoginRequest>;
 
 export const CreateAppRequest = z.object({
   name: z.string().min(1).max(120),
+  playStoreUrl: z.string().url().optional(),
+  appStoreUrl: z.string().url().optional(),
+  storeMeta: z
+    .object({
+      storeIconUrl: z.string().url().optional(),
+      publisherName: z.string().max(200).optional(),
+      playRating: z.number().min(0).max(5).optional(),
+      appStoreRating: z.number().min(0).max(5).optional(),
+      playReviewCount: z.number().int().nonnegative().optional(),
+      appStoreReviewCount: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
 });
 export type CreateAppRequest = z.infer<typeof CreateAppRequest>;
 

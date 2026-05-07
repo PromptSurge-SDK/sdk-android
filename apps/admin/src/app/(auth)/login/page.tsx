@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { login } from '@/lib/api';
+import { OAuthButtons } from '@/components/OAuthButtons';
+import { SurgeMark } from '@/components/SurgeMark';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -57,11 +59,11 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: 'var(--neutral-50)' }}>
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">
-            PS
+          <div className="mx-auto mb-3">
+            <SurgeMark size="auth" />
           </div>
           <CardTitle>Welcome back</CardTitle>
           <CardDescription>Log in to your PromptSurge account</CardDescription>
@@ -85,6 +87,18 @@ function LoginForm() {
               Log in
             </Button>
           </form>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-gray-400">
+              <span className="bg-white px-2">or continue with</span>
+            </div>
+          </div>
+
+          <OAuthButtons action="login" next={next} />
+
           <p className="mt-4 text-center text-sm text-gray-500">
             No account yet?{' '}
             <Link href="/signup" className="text-brand-600 hover:underline">

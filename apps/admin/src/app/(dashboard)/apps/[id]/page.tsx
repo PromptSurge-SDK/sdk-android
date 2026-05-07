@@ -1,10 +1,10 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getApp } from '@/lib/api';
+import { getApp, getSubscription } from '@/lib/api';
 import { getSessionToken } from '@/lib/session';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RotateKeyButton } from './RotateKeyButton';
+import { SubscriptionCard } from './SubscriptionCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,26 +21,21 @@ export default async function AppDetailPage({ params }: { params: { id: string }
     redirect('/login');
   }
 
+  // Fetch subscription — non-fatal if it fails (gracefully degrades)
+  const subscription = await getSubscription(token, params.id).catch(() => null);
+
   const activeKey = app.activeKeys.find((k) => !k.revokedAt);
   const gracePeriodKey = app.activeKeys.find((k) => k.revokedAt);
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/dashboard" className="hover:text-gray-900">Apps</Link>
-        <span>/</span>
-        <span className="text-gray-900 font-medium">{app.name}</span>
-      </div>
+      <h1 className="mb-6 text-xl font-semibold text-gray-900">Overview</h1>
 
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{app.name}</h1>
-        <Link
-          href={`/apps/${app.id}/events`}
-          className="text-sm text-brand-600 hover:underline"
-        >
-          View events →
-        </Link>
-      </div>
+      {subscription && (
+        <div className="mb-4">
+          <SubscriptionCard appId={app.id} initial={subscription} />
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>

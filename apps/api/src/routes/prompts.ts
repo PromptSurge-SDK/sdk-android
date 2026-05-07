@@ -1,24 +1,51 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db.js';
 import { requireApp } from '../auth/middleware.js';
+import { hardLimit, TIER_LIMITS, currentPeriodStart } from '../billing/tiers.js';
+import { getMonthlyImpressions } from '../billing/impressions.js';
 
 /**
  * Localized pre-prompt copy lookup.
  *
  * Resolution order (first hit wins):
- *   1. App-specific exact locale         (e.g. "de-DE")
- *   2. App-specific language-only        ("de")
- *   3. Global   exact locale
- *   4. Global   language-only
- *   5. Global   "en"
+ *   1. App-specific active prompts for exact locale   (e.g. "de-DE")
+ *   2. App-specific active prompts for language-only  ("de")
+ *   3. Global active prompts for exact locale
+ *   4. Global active prompts for language-only
+ *   5. Global active prompt for "en"
+ *
+ * Within a matching tier, one prompt is chosen at random (seeded by sessionId for
+ * stability within a session — client passes ?sessionId= for deterministic selection).
+ *
+ * Returns 402 if the app has exceeded its monthly impression hard limit
+ * (soft limit × 1.10 grace factor). The SDK should suppress the prompt on 402.
  */
 export async function registerPromptsRoute(app: FastifyInstance): Promise<void> {
   app.get('/v1/prompts', { preHandler: requireApp }, async (request, reply) => {
     const appRow = request.app!;
-    const requestedLocale = String((request.query as Record<string, unknown>).locale ?? 'en');
+    const q = request.query as Record<string, unknown>;
+    const requestedLocale = String(q.locale ?? 'en');
+    const sessionId = String(q.sessionId ?? '');
     const language = requestedLocale.split(/[-_]/)[0]?.toLowerCase() ?? 'en';
 
-    const candidates: Array<{ appId: string | null; locale: string }> = [
+    // ─── Impression gate ──────────────────────────────────────────────────────
+    const periodStart = currentPeriodStart(appRow);
+    const impressions = await getMonthlyImpressions(appRow.id, periodStart);
+    const limit = hardLimit(appRow.subscriptionTier);
+
+    if (impressions >= limit) {
+      return reply.code(402).send({
+        error:      'impression_limit_exceeded',
+        tier:       appRow.subscriptionTier,
+        impressions,
+        limit:      TIER_LIMITS[appRow.subscriptionTier],
+        upgradeUrl: 'https://admin.promptsurge.me/billing',
+      });
+    }
+
+    // ─── Prompt lookup ────────────────────────────────────────────────────────
+    type Tier = { appId: string | null; locale: string };
+    const tiers: Tier[] = [
       { appId: appRow.id, locale: requestedLocale },
       { appId: appRow.id, locale: language },
       { appId: null, locale: requestedLocale },
@@ -26,19 +53,36 @@ export async function registerPromptsRoute(app: FastifyInstance): Promise<void> 
       { appId: null, locale: 'en' },
     ];
 
-    for (const c of candidates) {
-      const found = c.appId === null
-        ? await prisma.promptText.findFirst({ where: { appId: null, locale: c.locale } })
-        : await prisma.promptText.findFirst({ where: { appId: c.appId, locale: c.locale } });
-      if (found) {
-        return reply.code(200).send({
-          locale: found.locale,
-          title: found.title,
-          body: found.body,
-          ctaConfirm: found.ctaConfirm,
-          ctaDismiss: found.ctaDismiss,
-        });
+    for (const tier of tiers) {
+      const candidates = await prisma.promptText.findMany({
+        where: tier.appId === null
+          ? { appId: null, locale: tier.locale, status: 'active' }
+          : { appId: tier.appId, locale: tier.locale, status: 'active' },
+      });
+      if (candidates.length === 0) continue;
+
+      // Deterministic random selection: hash sessionId+appId+locale into an index.
+      let idx = 0;
+      if (candidates.length > 1 && sessionId) {
+        const seed = sessionId + appRow.id + tier.locale;
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+          hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+        }
+        idx = Math.abs(hash) % candidates.length;
+      } else if (candidates.length > 1) {
+        idx = Math.floor(Math.random() * candidates.length);
       }
+
+      const found = candidates[idx]!;
+      return reply.code(200).send({
+        locale:     found.locale,
+        title:      found.title,
+        body:       found.body,
+        ctaConfirm: found.ctaConfirm,
+        ctaDismiss: found.ctaDismiss,
+        imageUrl:   found.imageUrl ?? null,
+      });
     }
 
     return reply.code(404).send({ error: 'no_prompt_text' });

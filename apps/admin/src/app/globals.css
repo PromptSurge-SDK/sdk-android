@@ -1,3 +1,79 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Brand design tokens ────────────────────────────────────────────────────── */
+:root {
+  /* Teal ramp */
+  --teal-50:  #E0F5EF;
+  --teal-100: #A8E3D0;
+  --teal-200: #5CCBB0;
+  --teal-300: #1FB896;
+  --teal-400: #0E9E80;
+  --teal-500: #0B8068;
+  --teal-600: #086050;
+  --teal-700: #053F35;
+
+  /* Neutrals */
+  --neutral-50:  #FAFAF9;
+  --neutral-100: #F2F0EA;
+  --neutral-200: #D5D3CA;
+  --neutral-400: #888780;
+  --neutral-700: #3D3C38;
+
+  /* Ink */
+  --ink:    #1A1F2E;
+  --ink-60: rgba(26,31,46,0.6);
+  --ink-30: rgba(26,31,46,0.3);
+  --ink-10: rgba(26,31,46,0.08);
+
+  /* Semantic */
+  --color-brand:       var(--teal-400);
+  --color-brand-hover: var(--teal-500);
+  --color-surface:     #F8FDFB;
+  --color-border:      var(--ink-10);
+}
+
+/* ─── Base typography ────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--neutral-50);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.025em;
+}
+
+code, pre, .font-mono {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+}
+
+/* ─── Surge Mark animations ──────────────────────────────────────────────────── */
+@keyframes surge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes ray-flash {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 0.15; }
+}
+
+.animate-surge-pulse {
+  animation: surge-pulse 2.2s ease-in-out infinite;
+}
+
+.animate-ray-flash       { animation: ray-flash 2.2s ease-in-out infinite; }
+.animate-ray-flash-1     { animation: ray-flash 2.2s ease-in-out 0.00s infinite; }
+.animate-ray-flash-2     { animation: ray-flash 2.2s ease-in-out 0.15s infinite; }
+.animate-ray-flash-3     { animation: ray-flash 2.2s ease-in-out 0.30s infinite; }
+.animate-ray-flash-4     { animation: ray-flash 2.2s ease-in-out 0.10s infinite; }
+.animate-ray-flash-5     { animation: ray-flash 2.2s ease-in-out 0.25s infinite; }

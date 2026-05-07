@@ -2,8 +2,13 @@ package com.promptsurge.sdk
 
 import android.app.Dialog
 import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
+import coil.load
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.promptsurge.sdk.internal.EventTypes
 import com.promptsurge.sdk.internal.PromptDefaults
@@ -26,7 +31,9 @@ internal class PrePromptDialogFragment : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val cfg = listener ?: DefaultConfig
-        return MaterialAlertDialogBuilder(requireContext())
+        val imageUrl = PromptSurge.promptRepo?.getCachedOrDefaults()?.imageUrl
+
+        val builder = MaterialAlertDialogBuilder(requireContext())
             .setTitle(cfg.title)
             .setMessage(cfg.body)
             .setPositiveButton(cfg.ctaConfirm) { _, _ ->
@@ -36,7 +43,22 @@ internal class PrePromptDialogFragment : DialogFragment() {
                 listener?.onDismissed()
             }
             .setCancelable(false)
-            .create()
+
+        // When an imageUrl is available, add a header image above the dialog content.
+        if (!imageUrl.isNullOrBlank()) {
+            val imageView = ImageView(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_height) * 3,
+                )
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                // Coil loads the image and falls back silently on failure (dialog still shows).
+                load(imageUrl)
+            }
+            builder.setCustomTitle(imageView)
+        }
+
+        return builder.create()
     }
 
     override fun onResume() {

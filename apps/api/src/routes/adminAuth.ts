@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { hashPassword, verifyPassword } from '../auth/passwords.js';
 import { createSession, deleteSession } from '../auth/sessions.js';
 import { requireDeveloper } from '../auth/middleware.js';
+import { getOrCreateDeveloperOrg } from '../auth/appAccess.js';
 
 export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/admin/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -17,6 +18,8 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
       const developer = await prisma.developer.create({
         data: { email: parsed.data.email.toLowerCase(), passwordHash },
       });
+      // Auto-create personal org for new developer
+      await getOrCreateDeveloperOrg(developer.id);
       const { token, session } = await createSession(developer.id);
       return reply.code(201).send({
         token,
@@ -44,6 +47,11 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
       await hashPassword(parsed.data.password).catch(() => undefined);
       return reply.code(401).send({ error: 'invalid_credentials' });
     }
+    // OAuth-only accounts have no password — return generic invalid_credentials to
+    // avoid leaking that the email exists (timing is still slightly off, but acceptable).
+    if (!developer.passwordHash) {
+      return reply.code(401).send({ error: 'invalid_credentials' });
+    }
     const ok = await verifyPassword(developer.passwordHash, parsed.data.password);
     if (!ok) {
       return reply.code(401).send({ error: 'invalid_credentials' });
@@ -65,6 +73,16 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
 
   app.get('/admin/me', { preHandler: requireDeveloper }, async (request, reply) => {
     const dev = request.developer!;
-    return reply.send({ id: dev.id, email: dev.email, createdAt: dev.createdAt.toISOString() });
+    const full = await prisma.developer.findUnique({
+      where: { id: dev.id },
+      include: { oauthAccounts: { select: { provider: true } } },
+    });
+    return reply.send({
+      id: dev.id,
+      email: dev.email,
+      createdAt: dev.createdAt.toISOString(),
+      hasPassword: full?.passwordHash != null,
+      oauthProviders: full?.oauthAccounts.map((a) => a.provider) ?? [],
+    });
   });
 }

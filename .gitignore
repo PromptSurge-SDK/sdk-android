@@ -36,3 +36,5 @@ build/
 # Playwright
 apps/admin/playwright-report/
 apps/admin/test-results/
+
+.vercel

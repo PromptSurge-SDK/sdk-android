@@ -11,14 +11,120 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PromptStatus {
+  draft
+  active
+  discarded
+}
+
+enum KeywordType {
+  positive
+  negative
+}
+
+enum LlmProviderType {
+  openai_compatible
+  anthropic
+  gemini
+}
+
+enum ThemeStatus {
+  pending
+  accepted
+  discarded
+}
+
+enum AnalysisRunStatus {
+  pending
+  completed
+  failed
+  cached
+}
+
+enum OrgRole {
+  owner
+  member
+}
+
+enum SubscriptionTier {
+  indie
+  startup
+  growth
+  enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  cancelled
+  paused
+}
+
 model Developer {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?  // null for OAuth-only accounts
   createdAt    DateTime @default(now())
 
-  apps     App[]
-  sessions Session[]
+  apps           App[]
+  sessions       Session[]
+  orgMemberships OrganizationMember[]
+  oauthAccounts  OAuthAccount[]
+}
+
+/// Linked OAuth provider account. One row per (provider, providerAccountId).
+/// A developer may have multiple rows (one per provider they've connected).
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  developerId       String
+  provider          String   // 'google' | 'github' | 'apple' | 'facebook'
+  providerAccountId String
+  email             String?
+  createdAt         DateTime @default(now())
+
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([developerId])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  apps    App[]
+  members OrganizationMember[]
+  invites OrganizationInvite[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  developerId    String
+  role           OrgRole  @default(member)
+  joinedAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  developer    Developer    @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, developerId])
+  @@index([developerId])
+}
+
+model OrganizationInvite {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrgRole   @default(member)
+  token          String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model Session {
@@ -39,10 +145,40 @@ model App {
   name        String
   createdAt   DateTime @default(now())
 
-  developer Developer    @relation(fields: [developerId], references: [id], onDelete: Cascade)
-  events    Event[]
-  prompts   PromptText[]
-  apiKeys   ApiKey[]
+  appStoreUrl    String?
+  playStoreUrl   String?
+
+  storeIconUrl         String?
+  publisherName        String?
+  playRating           Float?
+  appStoreRating       Float?
+  playReviewCount      Int?
+  appStoreReviewCount  Int?
+  storeMetaUpdatedAt   DateTime?
+
+  organizationId String?
+
+  organization        Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  // Billing
+  subscriptionTier    SubscriptionTier   @default(indie)
+  subscriptionStatus  SubscriptionStatus @default(active)
+  lsSubscriptionId    String?            @unique
+  lsCustomerId        String?
+  billingPeriodStart  DateTime?
+  billingPeriodEnd    DateTime?
+
+  developer           Developer          @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  events              Event[]
+
+  @@index([organizationId])
+  prompts             PromptText[]
+  apiKeys             ApiKey[]
+  keywords            Keyword[]
+  llmProviderConfig   LlmProviderConfig?
+  llmUsageLogs        LlmUsageLog[]
+  themes              Theme[]
+  reviewAnalysisRuns  ReviewAnalysisRun[]
 
   @@index([developerId])
 }
@@ -65,19 +201,107 @@ model ApiKey {
 }
 
 model PromptText {
-  id          String   @id @default(cuid())
-  appId       String?
-  locale      String
-  title       String
-  body        String
-  ctaConfirm  String
-  ctaDismiss  String
-  createdAt   DateTime @default(now())
+  id             String       @id @default(cuid())
+  appId          String?
+  locale         String
+  title          String
+  body           String
+  ctaConfirm     String
+  ctaDismiss     String
+  imageUrl       String?
+  status         PromptStatus @default(active)
+  sourceKeywords String[]     @default([])
+  generatedByLlm Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   app App? @relation(fields: [appId], references: [id], onDelete: Cascade)
 
-  @@unique([appId, locale])
   @@index([locale])
+  @@index([appId, locale, status])
+}
+
+model Keyword {
+  id        String      @id @default(cuid())
+  appId     String
+  text      String
+  type      KeywordType
+  createdAt DateTime    @default(now())
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+}
+
+/// LLM provider configuration per app. One config per app (replaced on PUT).
+/// encryptedApiKey is a libsodium sealed box (Curve25519/XSalsa20-Poly1305).
+model LlmProviderConfig {
+  id              String          @id @default(cuid())
+  appId           String          @unique
+  providerType    LlmProviderType
+  modelName       String
+  baseUrl         String?
+  encryptedApiKey Bytes
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+}
+
+/// One row per LLM API call. For developer visibility only (not billing).
+model LlmUsageLog {
+  id           String          @id @default(cuid())
+  appId        String
+  providerType LlmProviderType
+  modelName    String
+  inputTokens  Int
+  outputTokens Int
+  success      Boolean
+  errorMessage String?
+  purpose      String          @default("prompt_generation")
+  createdAt    DateTime        @default(now())
+
+  app               App                 @relation(fields: [appId], references: [id], onDelete: Cascade)
+  reviewAnalysisRun ReviewAnalysisRun[]
+
+  @@index([appId, createdAt])
+}
+
+/// Recurring praise theme extracted from pasted app store reviews via LLM.
+model Theme {
+  id              String      @id @default(cuid())
+  appId           String
+  label           String
+  frequency       Int
+  examplePhrases  String[]
+  status          ThemeStatus @default(pending)
+  sourceHash      String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, sourceHash, status])
+}
+
+/// One row per review analysis run (LLM call or cache hit).
+model ReviewAnalysisRun {
+  id            String            @id @default(cuid())
+  appId         String
+  sourceHash    String
+  reviewCount   Int
+  filteredCount Int
+  inputTokens   Int               @default(0)
+  outputTokens  Int               @default(0)
+  costUsd       Float             @default(0)
+  llmUsageLogId String?
+  status        AnalysisRunStatus @default(pending)
+  createdAt     DateTime          @default(now())
+
+  app         App          @relation(fields: [appId], references: [id], onDelete: Cascade)
+  llmUsageLog LlmUsageLog? @relation(fields: [llmUsageLogId], references: [id])
+
+  @@index([appId, sourceHash, createdAt])
 }
 
 model Event {
