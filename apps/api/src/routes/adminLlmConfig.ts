@@ -42,7 +42,7 @@ export async function registerAdminLlmConfigRoutes(app: FastifyInstance): Promis
     try {
       const plain = await (await import('../crypto/index.js')).decryptApiKey(Buffer.from(config.encryptedApiKey));
       apiKeyMasked = maskApiKey(plain);
-    } catch {}
+    } catch { /* decryption failure leaves masked value as *** */ }
 
     return reply.send({
       config: {

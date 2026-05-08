@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma } from '../db.js';
 import { requireDeveloper } from '../auth/middleware.js';
 import { uploadImage } from '../storage/s3.js';
 import { assertAppAccess } from '../auth/appAccess.js';

@@ -116,7 +116,7 @@ describe('M4 auth + cross-tenant isolation', () => {
 
   it('cross-tenant: developer A cannot read developer B events via /admin/events', async () => {
     const a = await signup(EMAIL_B); // EMAIL_B used for "developer A" here
-    const aApp = await createApp(a.token, 'A app');
+    await createApp(a.token, 'A app');
     const bEmail = `cross-${EMAIL_B}`;
     cleanupEmails.push(bEmail);
     const b = await signup(bEmail);
