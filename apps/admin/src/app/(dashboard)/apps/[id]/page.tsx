@@ -1,11 +1,10 @@
 import { notFound, redirect } from 'next/navigation';
 import { getApp, getSubscription } from '@/lib/api';
 import { getSessionToken } from '@/lib/session';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RotateKeyButton } from './RotateKeyButton';
-import { SubscriptionCard } from './SubscriptionCard';
+import { OverviewClient } from './OverviewClient';
 import { DeleteAppButton } from '@/components/DeleteAppButton';
+import { RotateKeyButton } from './RotateKeyButton';
+import { SubscriptionBanners } from '@/components/SubscriptionBanners';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,17 +21,20 @@ export default async function AppDetailPage({ params }: { params: { id: string }
     redirect('/login');
   }
 
-  // Fetch subscription — non-fatal if it fails (gracefully degrades)
-  // Fetch subscription — non-fatal if it fails (gracefully degrades)
   const subscription = await getSubscription(token, params.id).catch(() => null);
 
-  const activeKey = app.activeKeys.find((k) => !k.revokedAt);
-  const gracePeriodKey = app.activeKeys.find((k) => k.revokedAt);
+  const activeKey = app.activeKeys.find(k => !k.revokedAt);
+  const gracePeriodKey = app.activeKeys.find(k => k.revokedAt);
 
   return (
-    <div>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <h1 className="text-xl font-semibold text-gray-900">Overview</h1>
+    <div className="space-y-6">
+      <SubscriptionBanners subscription={subscription} appId={app.id} />
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Overview</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Last 30 days · Treatment group</p>
+        </div>
         <DeleteAppButton
           appId={app.id}
           appName={app.name}
@@ -41,63 +43,26 @@ export default async function AppDetailPage({ params }: { params: { id: string }
         />
       </div>
 
-      {subscription && (
-        <div className="mb-4">
-          <SubscriptionCard appId={app.id} initial={subscription} />
-        </div>
-      )}
+      <OverviewClient appId={app.id} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Stats</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Total events</span>
-              <span className="font-medium">{app.eventCount.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">API keys</span>
-              <span className="font-medium">{app.keyCount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Created</span>
-              <span className="font-medium">{new Date(app.createdAt).toLocaleDateString()}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>API key</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {activeKey ? (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Active key</span>
-                  <Badge variant="default">Active</Badge>
-                </div>
-                <code className="block rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700">
-                  ps_live_••••••••{activeKey.id.slice(-6)}
-                </code>
-                <p className="text-xs text-gray-400">
-                  Created {new Date(activeKey.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            ) : (
-              <p className="text-gray-500">No active key found.</p>
-            )}
-            {gracePeriodKey && (
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                A previous key is in the 7-day grace period (expires{' '}
-                {new Date(gracePeriodKey.revokedAt!).toLocaleDateString()}).
-              </div>
-            )}
+      {/* API key — compact section at bottom */}
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">API key</p>
+        {activeKey ? (
+          <div className="flex items-center gap-3">
+            <code className="flex-1 rounded border border-gray-200 bg-white px-2 py-1.5 font-mono text-xs text-gray-700">
+              ps_live_••••••••{activeKey.id.slice(-6)}
+            </code>
             <RotateKeyButton appId={app.id} />
-          </CardContent>
-        </Card>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No active key.</p>
+        )}
+        {gracePeriodKey && (
+          <p className="mt-2 text-xs text-amber-700">
+            Previous key in 7-day grace period — expires {new Date(gracePeriodKey.revokedAt!).toLocaleDateString()}.
+          </p>
+        )}
       </div>
     </div>
   );
