@@ -177,8 +177,8 @@ function HowItWorks() {
             {
               step: '02',
               title: 'Generate AI prompts',
-              body: 'Paste your existing reviews — the AI (your own LLM key) extracts recurring praise themes and writes pre-prompts that mention them by name.',
-              detail: 'OpenAI · Anthropic · Gemini · any OpenAI-compatible endpoint',
+              body: 'Paste your existing reviews — the built-in AI extracts recurring praise themes and writes pre-prompts that mention them by name. Bring your own key if you prefer.',
+              detail: 'Built-in model included · OpenAI · Anthropic · Gemini · any compatible endpoint',
             },
             {
               step: '03',
@@ -337,7 +337,7 @@ const FAQS = [
   },
   {
     q: 'Do I need to provide an LLM API key?',
-    a: 'Yes — PromptSurge is bring-your-own-LLM. We support OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint (including DeepSeek, Mistral, etc.). You enter your key once in the dashboard; it\'s encrypted at rest and never returned in API responses.',
+    a: 'No. PromptSurge includes a built-in AI model — you can generate and refine prompts the moment you sign up, no key required. If you prefer to use your own OpenAI, Anthropic, Gemini, or compatible endpoint, you can add a key in the dashboard and it will be used instead. Keys are encrypted at rest and never returned in API responses.',
   },
   {
     q: 'What data does the SDK collect?',
@@ -349,7 +349,7 @@ const FAQS = [
   },
   {
     q: 'How does the AI generate prompt copy?',
-    a: 'You paste your existing app store reviews into the dashboard. The AI (using your own LLM key) identifies recurring praise themes — e.g. "offline mode", "fast sync", "clean UI" — and writes pre-prompts that mention those themes naturally. You review and accept the ones you want to use. Review text is processed in memory and never stored.',
+    a: 'You paste your existing app store reviews into the dashboard. The built-in AI identifies recurring praise themes — e.g. "offline mode", "fast sync", "clean UI" — and writes pre-prompts that mention those themes naturally. You review and accept the ones you want to use. Review text is processed in memory and never stored.',
   },
   {
     q: 'Is there a free plan?',

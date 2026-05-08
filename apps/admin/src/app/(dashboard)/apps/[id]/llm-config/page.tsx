@@ -39,10 +39,10 @@ export default async function LlmConfigPage({ params }: { params: { id: string }
       </div>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">LLM provider configuration</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Bring your own model <span className="text-base font-normal text-gray-400">(optional)</span></h1>
         <p className="mt-1 text-sm text-gray-500">
-          Connect your own LLM API key to generate and refine pre-prompt copy.
-          PromptSurge never has access to your LLM costs.
+          PromptSurge includes a built-in AI model — no setup required. If you prefer to use your own
+          OpenAI, Anthropic, Gemini, or compatible key, add it here and it will be used instead.
         </p>
       </div>
 

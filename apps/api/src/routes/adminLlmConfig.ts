@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireDeveloper } from '../auth/middleware.js';
 import { encryptApiKey, maskApiKey } from '../crypto/index.js';
-import { getProvider } from '../llm/factory.js';
+import { getProvider, resolveProvider } from '../llm/factory.js';
 import { assertAppAccess } from '../auth/appAccess.js';
 import { PROVIDERS } from '../llm/models.js';
 import type { GeneratedPrompt } from '../llm/interface.js';
+
+const GENERATE_RATE_LIMIT_PER_DAY = 20;
 
 const LlmConfigBody = z.object({
   providerType: z.enum(['openai_compatible', 'anthropic', 'gemini']),
@@ -117,14 +119,23 @@ export async function registerAdminLlmConfigRoutes(app: FastifyInstance): Promis
     const parsed = GenerateBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
 
-    const config = await prisma.llmProviderConfig.findUnique({ where: { appId } });
-    if (!config) return reply.code(400).send({ code: 'no_llm_provider', error: 'No LLM provider configured for this app' });
+    const appConfig = await prisma.llmProviderConfig.findUnique({ where: { appId } });
+    const resolved = await resolveProvider(appConfig);
+    if (!resolved) return reply.code(503).send({ code: 'no_llm_provider', error: 'No LLM provider available — contact support.' });
+
+    // Per-app daily rate limit
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const todayCount = await prisma.llmUsageLog.count({
+      where: { appId, purpose: 'prompt_generation', createdAt: { gte: dayAgo } },
+    });
+    if (todayCount >= GENERATE_RATE_LIMIT_PER_DAY) {
+      return reply.code(429).send({ error: 'rate_limit_exceeded', limit: GENERATE_RATE_LIMIT_PER_DAY });
+    }
 
     const keywords = await prisma.keyword.findMany({ where: { appId } });
     const positiveKeywords = keywords.filter(k => k.type === 'positive').map(k => k.text);
     const negativeKeywords = keywords.filter(k => k.type === 'negative').map(k => k.text);
 
-    // Accepted themes (when useThemes is true)
     const acceptedThemes = parsed.data.useThemes
       ? await prisma.theme.findMany({ where: { appId, status: 'accepted' }, orderBy: { frequency: 'desc' } })
       : [];
@@ -135,8 +146,7 @@ export async function registerAdminLlmConfigRoutes(app: FastifyInstance): Promis
     let errorMessage: string | undefined;
 
     try {
-      const provider = await getProvider(config);
-      generateResult = await provider.generatePrompts({
+      generateResult = await resolved.provider.generatePrompts({
         positiveKeywords: [...positiveKeywords, ...themeLabels],
         negativeKeywords,
         locale: parsed.data.locale,
@@ -145,12 +155,11 @@ export async function registerAdminLlmConfigRoutes(app: FastifyInstance): Promis
     } catch (err) {
       success = false;
       errorMessage = err instanceof Error ? err.message : String(err);
-      // Log failure then return error
       await prisma.llmUsageLog.create({
         data: {
           appId,
-          providerType: config.providerType,
-          modelName: config.modelName,
+          providerType: resolved.providerType,
+          modelName: resolved.modelName,
           inputTokens: 0,
           outputTokens: 0,
           success: false,
@@ -161,12 +170,11 @@ export async function registerAdminLlmConfigRoutes(app: FastifyInstance): Promis
       return reply.code(502).send({ error: 'llm_error', message: errorMessage });
     }
 
-    // Log usage
     await prisma.llmUsageLog.create({
       data: {
         appId,
-        providerType: config.providerType,
-        modelName: config.modelName,
+        providerType: resolved.providerType,
+        modelName: resolved.modelName,
         inputTokens: generateResult.usage.inputTokens,
         outputTokens: generateResult.usage.outputTokens,
         success,

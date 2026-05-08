@@ -97,6 +97,10 @@ CNAME  cdn   <cloudfront-distribution-id>.cloudfront.net
 | `AWS_SECRET_ACCESS_KEY` | AWS credential for S3 uploads |
 | `CDN_BASE_URL` | `https://cdn.promptsurge.me` |
 | `REDIS_URL` | Redis connection string (optional — BullMQ scheduler disabled if unset) |
+| `DEFAULT_LLM_PROVIDER` | Platform default LLM provider (`anthropic`, `openai_compatible`, or `gemini`) |
+| `DEFAULT_LLM_MODEL` | Model name for the platform default (e.g. `claude-haiku-4-5-20251001`) |
+| `DEFAULT_LLM_KEY` | API key for the platform default provider |
+| `DEFAULT_LLM_BASE_URL` | Base URL for OpenAI-compatible providers (optional, omit for OpenAI/Anthropic/Gemini) |
 
 ### Vercel admin environment variables
 
