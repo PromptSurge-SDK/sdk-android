@@ -10,13 +10,13 @@ export const DIALOG_PRESETS: Record<string, {
 }> = {
   // Current presets
   system: { backgroundColor: '#FFFBFE', accentColor: '#6750A4', textColor: '#1C1B1F', buttonTextColor: '#FFFFFF' },
-  gaming: { backgroundColor: '#542916', accentColor: '#EEC941', textColor: '#FFFFFF',  buttonTextColor: '#542916' },
-  sweet:  { backgroundColor: '#1A0D6E', accentColor: '#F990C4', textColor: '#FFFFFF',  buttonTextColor: '#1A0D6E' },
+  gaming: { backgroundColor: '#1A2744', accentColor: '#FFD23F', textColor: '#FFFFFF',  buttonTextColor: '#1A2744' },
+  sweet:  { backgroundColor: '#5B2080', accentColor: '#F7A722', textColor: '#FAF0D3',  buttonTextColor: '#5B2080' },
   metal:  { backgroundColor: '#13111A', accentColor: '#A8A8B8', textColor: '#F0F0F5',  buttonTextColor: '#13111A' },
   // Legacy aliases — keep for backward compat with existing stored presetIds
   default:  { backgroundColor: '#FFFBFE', accentColor: '#6750A4', textColor: '#1C1B1F', buttonTextColor: '#FFFFFF' },
-  midnight: { backgroundColor: '#542916', accentColor: '#EEC941', textColor: '#FFFFFF',  buttonTextColor: '#542916' },
-  ocean:    { backgroundColor: '#1A0D6E', accentColor: '#F990C4', textColor: '#FFFFFF',  buttonTextColor: '#1A0D6E' },
+  midnight: { backgroundColor: '#1A2744', accentColor: '#FFD23F', textColor: '#FFFFFF',  buttonTextColor: '#1A2744' },
+  ocean:    { backgroundColor: '#5B2080', accentColor: '#F7A722', textColor: '#FAF0D3',  buttonTextColor: '#5B2080' },
   sunset:   { backgroundColor: '#13111A', accentColor: '#A8A8B8', textColor: '#F0F0F5',  buttonTextColor: '#13111A' },
 };
 
