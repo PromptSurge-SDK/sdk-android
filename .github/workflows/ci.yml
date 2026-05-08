@@ -51,8 +51,8 @@ jobs:
       - name: Lint (all TS packages)
         run: pnpm -r lint
 
-      - name: Test (all TS packages)
-        run: pnpm -r test
+      - name: Test (unit tests only — API integration tests require a live DB)
+        run: pnpm -r --filter "!api" test
 
   # ── Android jobs ──────────────────────────────────────────────────────────
   android-build-test:
