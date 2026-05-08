@@ -22,6 +22,11 @@ enum KeywordType {
   negative
 }
 
+enum KeywordAction {
+  added
+  removed
+}
+
 enum LlmProviderType {
   openai_compatible
   anthropic
@@ -64,6 +69,8 @@ model Developer {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String?  // null for OAuth-only accounts
+  firstName    String?
+  lastName     String?
   createdAt    DateTime @default(now())
 
   apps           App[]
@@ -180,6 +187,8 @@ model App {
   llmUsageLogs        LlmUsageLog[]
   themes              Theme[]
   reviewAnalysisRuns  ReviewAnalysisRun[]
+  keywordAuditLogs    KeywordAuditLog[]
+  dialogTheme         AppDialogTheme?
 
   @@index([developerId])
 }
@@ -232,6 +241,41 @@ model Keyword {
   app App @relation(fields: [appId], references: [id], onDelete: Cascade)
 
   @@index([appId])
+}
+
+model AppDialogTheme {
+  id              String   @id @default(cuid())
+  appId           String   @unique
+  presetId        String   @default("default")
+  accentColor     String?
+  backgroundColor String?
+  textColor       String?
+  buttonTextColor String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+}
+
+model BannedKeyword {
+  id        String   @id @default(cuid())
+  keyword   String   @unique
+  createdAt DateTime @default(now())
+}
+
+model KeywordAuditLog {
+  id             String        @id @default(cuid())
+  appId          String
+  keyword        String
+  action         KeywordAction
+  type           KeywordType
+  changedById    String
+  changedByEmail String
+  changedAt      DateTime      @default(now())
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, changedAt])
 }
 
 /// LLM provider configuration per app. One config per app (replaced on PUT).
@@ -318,6 +362,7 @@ model Event {
   locale         String
   resolvedLocale String?
   platform       String
+  holdout        Boolean  @default(false)
   payload        Json     @default("{}")
   createdAt      DateTime @default(now())
 
@@ -326,4 +371,5 @@ model Event {
   @@index([appId, eventType, timestamp])
   @@index([appId, deviceId, timestamp])
   @@index([appId, resolvedLocale, timestamp])
+  @@index([appId, holdout, timestamp])
 }

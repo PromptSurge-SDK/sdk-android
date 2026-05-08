@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSessionToken } from '@/lib/session';
+import { getMe } from '@/lib/api';
 import { AcceptInviteClient } from './AcceptInviteClient';
 
 interface Props {
@@ -30,7 +31,11 @@ export default async function InvitePage({ params }: Props) {
     redirect(`/login?next=/invite/${params.token}`);
   }
 
-  const preview = await fetchInvitePreview(params.token);
+  const [preview, me] = await Promise.all([
+    fetchInvitePreview(params.token),
+    getMe(sessionToken).catch(() => null),
+  ]);
+  const hasName = !!(me?.firstName && me?.lastName);
 
   if ('error' in preview) {
     return (
@@ -74,7 +79,7 @@ export default async function InvitePage({ params }: Props) {
         <p className="mb-6 text-xs text-gray-400">
           Invite sent to {preview.email} · Expires {new Date(preview.expiresAt).toLocaleDateString()}
         </p>
-        <AcceptInviteClient inviteToken={params.token} />
+        <AcceptInviteClient inviteToken={params.token} hasName={hasName} />
       </div>
     </div>
   );

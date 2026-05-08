@@ -31,6 +31,7 @@ export async function registerEventsRoute(app: FastifyInstance): Promise<void> {
         locale: e.locale,
         resolvedLocale: typeof rl === 'string' && rl.length > 0 ? rl : null,
         platform: e.platform,
+        holdout: e.holdout ?? false,
         payload: payload as Prisma.InputJsonValue,
       };
     });

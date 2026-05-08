@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { requireApp } from '../auth/middleware.js';
 import { hardLimit, TIER_LIMITS, currentPeriodStart } from '../billing/tiers.js';
 import { getMonthlyImpressions } from '../billing/impressions.js';
+import { resolveTheme } from './adminAppearance.js';
 
 /**
  * Localized pre-prompt copy lookup.
@@ -50,6 +51,10 @@ export async function registerPromptsRoute(app: FastifyInstance): Promise<void> 
       });
     }
 
+    // ─── Dialog theme ─────────────────────────────────────────────────────────
+    const themeRow = await prisma.appDialogTheme.findUnique({ where: { appId: appRow.id } });
+    const theme = themeRow ? resolveTheme(themeRow) : null;
+
     // ─── Prompt lookup ────────────────────────────────────────────────────────
     type Tier = { appId: string | null; locale: string };
     const tiers: Tier[] = [
@@ -89,6 +94,7 @@ export async function registerPromptsRoute(app: FastifyInstance): Promise<void> 
         ctaConfirm: found.ctaConfirm,
         ctaDismiss: found.ctaDismiss,
         imageUrl:   found.imageUrl ?? null,
+        theme,
       });
     }
 

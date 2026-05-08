@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { LoginRequest, SignupRequest } from '@promptsurge/shared-types';
 import { prisma } from '../db.js';
 import { hashPassword, verifyPassword } from '../auth/passwords.js';
@@ -16,7 +17,12 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
     const passwordHash = await hashPassword(parsed.data.password);
     try {
       const developer = await prisma.developer.create({
-        data: { email: parsed.data.email.toLowerCase(), passwordHash },
+        data: {
+          email: parsed.data.email.toLowerCase(),
+          passwordHash,
+          firstName: parsed.data.firstName ?? null,
+          lastName: parsed.data.lastName ?? null,
+        },
       });
       // Auto-create personal org for new developer
       await getOrCreateDeveloperOrg(developer.id);
@@ -24,7 +30,7 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
       return reply.code(201).send({
         token,
         expiresAt: session.expiresAt.toISOString(),
-        developer: { id: developer.id, email: developer.email },
+        developer: { id: developer.id, email: developer.email, firstName: developer.firstName, lastName: developer.lastName },
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -80,9 +86,26 @@ export async function registerAdminAuthRoutes(app: FastifyInstance): Promise<voi
     return reply.send({
       id: dev.id,
       email: dev.email,
+      firstName: full?.firstName ?? null,
+      lastName: full?.lastName ?? null,
       createdAt: dev.createdAt.toISOString(),
       hasPassword: full?.passwordHash != null,
       oauthProviders: full?.oauthAccounts.map((a) => a.provider) ?? [],
     });
+  });
+
+  app.patch('/admin/me', { preHandler: requireDeveloper }, async (request, reply) => {
+    const dev = request.developer!;
+    const Body = z.object({
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
+    });
+    const parsed = Body.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
+    const updated = await prisma.developer.update({
+      where: { id: dev.id },
+      data: { firstName: parsed.data.firstName, lastName: parsed.data.lastName },
+    });
+    return reply.send({ firstName: updated.firstName, lastName: updated.lastName });
   });
 }

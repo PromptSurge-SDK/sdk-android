@@ -12,6 +12,8 @@ const Common = {
   sdkVersion: z.string().min(1).max(64),
   locale: z.string().min(2).max(35),
   platform: Platform,
+  // true = holdout group (pre-prompt suppressed); false = treatment (default)
+  holdout: z.boolean().default(false),
 };
 
 export const FirstOpenEvent = z.object({

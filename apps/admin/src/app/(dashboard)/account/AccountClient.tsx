@@ -5,6 +5,75 @@ import { useRouter } from 'next/navigation';
 import type { Me, LinkedOAuthAccount } from '@/lib/api';
 import { ALL_PROVIDERS, PROVIDER_META } from '@/components/OAuthButtons';
 
+// ─── Profile section ──────────────────────────────────────────────────────────
+
+function ProfileSection({ me }: { me: Me }) {
+  const [firstName, setFirstName] = useState(me.firstName ?? '');
+  const [lastName, setLastName] = useState(me.lastName ?? '');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!firstName.trim() || !lastName.trim()) {
+      setMsg({ type: 'err', text: 'Both first and last name are required.' });
+      return;
+    }
+    setLoading(true);
+    setMsg(null);
+    const res = await fetch('/api/account/update-profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim() }),
+    });
+    setLoading(false);
+    if (res.ok) {
+      setMsg({ type: 'ok', text: 'Name updated.' });
+    } else {
+      setMsg({ type: 'err', text: 'Failed to update name.' });
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
+      <div className="flex gap-3">
+        <div className="flex-1 space-y-1">
+          <label className="block text-sm font-medium text-gray-700">First name</label>
+          <input
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+            autoComplete="given-name"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+        <div className="flex-1 space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Last name</label>
+          <input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+            autoComplete="family-name"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+      </div>
+      {msg && (
+        <p className={`text-xs ${msg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{msg.text}</p>
+      )}
+      <button
+        type="submit"
+        disabled={loading}
+        className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+      >
+        {loading ? 'Saving…' : 'Save name'}
+      </button>
+    </form>
+  );
+}
+
 interface Props {
   me: Me;
   linkedAccounts: LinkedOAuthAccount[];
@@ -275,6 +344,10 @@ function DeleteAccountSection() {
 export function AccountClient({ me, linkedAccounts }: Props) {
   return (
     <div>
+      <Section title="Profile">
+        <ProfileSection me={me} />
+      </Section>
+
       <Section title={me.hasPassword ? 'Change password' : 'Set a password'}>
         <PasswordSection hasPassword={me.hasPassword} />
       </Section>

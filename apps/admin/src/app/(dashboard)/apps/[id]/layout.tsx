@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { getApp } from '@/lib/api';
+import { getApp, getApps, getSubscription } from '@/lib/api';
 import { getSessionToken } from '@/lib/session';
 import { AppSidebar } from '@/components/AppSidebar';
 
@@ -24,9 +24,19 @@ export default async function AppLayout({ children, params }: Props) {
     redirect('/login');
   }
 
+  const [appsResult, subResult] = await Promise.allSettled([
+    getApps(token),
+    getSubscription(token, params.id),
+  ]);
+
+  const apps = appsResult.status === 'fulfilled'
+    ? appsResult.value.map(a => ({ id: a.id, name: a.name }))
+    : [];
+  const subscription = subResult.status === 'fulfilled' ? subResult.value : null;
+
   return (
     <div className="flex flex-1 overflow-hidden">
-      <AppSidebar appId={params.id} appName={appName} />
+      <AppSidebar appId={params.id} appName={appName} apps={apps} subscription={subscription} />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-6 py-8">
           {children}

@@ -16,6 +16,8 @@ import { OAuthButtons } from '@/components/OAuthButtons';
 import { SurgeMark } from '@/components/SurgeMark';
 
 const schema = z.object({
+  firstName: z.string().min(1, 'First name is required').max(100),
+  lastName: z.string().min(1, 'Last name is required').max(100),
   email: z.string().email('Enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
@@ -34,7 +36,7 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setServerError('');
     try {
-      const session = await signup(data.email, data.password);
+      const session = await signup(data.email, data.password, data.firstName, data.lastName);
       await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,6 +62,18 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" data-testid="signup-form">
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="firstName">First name</Label>
+                <Input id="firstName" type="text" autoComplete="given-name" placeholder="Jane" {...register('firstName')} />
+                {errors.firstName && <p className="text-xs text-red-600">{errors.firstName.message}</p>}
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input id="lastName" type="text" autoComplete="family-name" placeholder="Smith" {...register('lastName')} />
+                {errors.lastName && <p className="text-xs text-red-600">{errors.lastName.message}</p>}
+              </div>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" autoComplete="email" placeholder="you@example.com" {...register('email')} />

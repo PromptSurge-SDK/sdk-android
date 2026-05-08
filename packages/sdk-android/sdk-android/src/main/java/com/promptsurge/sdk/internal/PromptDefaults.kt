@@ -1,5 +1,16 @@
 package com.promptsurge.sdk.internal
 
+import kotlinx.serialization.Serializable
+
+@Serializable
+internal data class DialogTheme(
+    val presetId: String,
+    val accentColor: String,
+    val backgroundColor: String,
+    val textColor: String,
+    val buttonTextColor: String,
+)
+
 /**
  * Bundled English defaults for the pre-prompt dialog.
  *
@@ -38,4 +49,5 @@ internal data class PromptText(
     val ctaConfirm: String,
     val ctaDismiss: String,
     val imageUrl: String? = null,
+    val theme: DialogTheme? = null,
 )

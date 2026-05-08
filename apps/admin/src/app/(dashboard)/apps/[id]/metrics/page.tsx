@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSessionToken } from '@/lib/session';
-import { getApp, ApiError } from '@/lib/api';
+import { getApp, getKeywords, getPrompts, ApiError } from '@/lib/api';
 import { MetricsClient } from './MetricsClient';
 
 export const dynamic = 'force-dynamic';
@@ -19,24 +18,21 @@ export default async function AppMetricsPage({ params }: { params: { id: string 
     redirect('/login');
   }
 
+  const [keywords, prompts] = await Promise.all([
+    getKeywords(token, params.id).catch(() => []),
+    getPrompts(token, params.id).catch(() => []),
+  ]);
+
   return (
     <div>
-      <div className="mb-6 flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/dashboard" className="hover:text-gray-900">Apps</Link>
-        <span>/</span>
-        <Link href={`/apps/${params.id}`} className="hover:text-gray-900">{appName}</Link>
-        <span>/</span>
-        <span className="text-gray-900 font-medium">Metrics</span>
-      </div>
-
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Metrics</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Prompt impressions, tap-through rates, and install conversion.
+        <h1 className="text-xl font-semibold text-gray-900">Metrics</h1>
+        <p className="mt-0.5 text-sm text-gray-500">
+          Prompt impressions, tap-through rates, and install conversion — {appName}
         </p>
       </div>
 
-      <MetricsClient appId={params.id} />
+      <MetricsClient appId={params.id} keywords={keywords} prompts={prompts} />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const SignupRequest = z.object({
   email: z.string().email().max(254),
   password: z.string().min(8).max(256),
+  firstName: z.string().min(1).max(100).optional(),
+  lastName: z.string().min(1).max(100).optional(),
 });
 export type SignupRequest = z.infer<typeof SignupRequest>;
 

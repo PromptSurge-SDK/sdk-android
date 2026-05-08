@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSessionToken } from '@/lib/session';
-import { getOrg, getOrgMembers, getOrgInvites } from '@/lib/api';
+import { getMe, getOrg, getOrgMembers, getOrgInvites } from '@/lib/api';
 import { TeamClient } from './TeamClient';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,8 @@ export default async function TeamPage() {
   const token = getSessionToken();
   if (!token) redirect('/login');
 
-  const [org, members, invites] = await Promise.all([
+  const [me, org, members, invites] = await Promise.all([
+    getMe(token),
     getOrg(token),
     getOrgMembers(token),
     getOrgInvites(token),
@@ -21,7 +22,7 @@ export default async function TeamPage() {
       <p className="mb-6 text-sm text-gray-500">
         Manage who has access to <span className="font-medium text-gray-700">{org.name}</span>.
       </p>
-      <TeamClient org={org} initialMembers={members} initialInvites={invites} />
+      <TeamClient org={org} currentDeveloperId={me.id} initialMembers={members} initialInvites={invites} />
     </div>
   );
 }

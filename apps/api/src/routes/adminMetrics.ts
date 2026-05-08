@@ -1,13 +1,13 @@
 /**
- * M7 Metrics endpoints.
+ * M7+ Metrics endpoints.
  *
- * Queries run against SQL views created in migration 20260509000000_m7_metrics_views:
- *   - event_daily_rollup  (per appId, date, resolvedLocale, appVersion)
- *   - tap_through_daily   (derived: tap-through rate)
+ * All queries support a `group` parameter: 'treatment' (default) | 'holdout'.
+ * - treatment: holdout=false events only (devices that saw the pre-prompt)
+ * - holdout:   holdout=true events only  (control group; no pre-prompt shown)
  *
- * Performance note: views aggregate the raw Event table. With the index on
- * (appId, eventType, timestamp) Postgres uses an index scan. Revisit with
- * materialized views + pg_cron refresh if the Event table grows past ~10M rows.
+ * The tap_through metric previously used the tap_through_daily SQL view. It now
+ * queries the Event table directly so it can filter by holdout group. The view
+ * remains in the DB but is no longer used here.
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db.js';
@@ -47,42 +47,50 @@ type TapThroughRow = { date: Date; tapThroughRate: number; prePromptShown: bigin
 type EventCountRow = { date: Date; count: bigint };
 type GeoRow = { resolvedLocale: string; shown: bigint; confirmed: bigint };
 type RpiRow = { date: Date; nativePromptRequested: bigint; firstOpen: bigint };
+type HoldoutStatsRow = { holdout: boolean; deviceCount: bigint; nativeCount: bigint; firstOpenCount: bigint };
 
-async function queryTapThrough(appId: string, from: Date, to: Date, version?: string): Promise<TapThroughRow[]> {
+async function queryTapThrough(appId: string, from: Date, to: Date, holdout: boolean, version?: string): Promise<TapThroughRow[]> {
   if (version) {
     return prisma.$queryRaw<TapThroughRow[]>`
-      SELECT date::date AS date,
-        SUM("prePromptShown")::bigint AS "prePromptShown",
-        SUM("prePromptConfirmed")::bigint AS "prePromptConfirmed",
-        SUM("prePromptDismissed")::bigint AS "prePromptDismissed",
-        CASE WHEN SUM("prePromptShown") > 0
-          THEN ROUND((SUM("prePromptConfirmed")::numeric / SUM("prePromptShown")::numeric) * 100, 2)
+      SELECT DATE_TRUNC('day', "timestamp")::date AS date,
+        COUNT(CASE WHEN "eventType" = 'pre_prompt_shown'     THEN 1 END)::bigint AS "prePromptShown",
+        COUNT(CASE WHEN "eventType" = 'pre_prompt_confirmed' THEN 1 END)::bigint AS "prePromptConfirmed",
+        COUNT(CASE WHEN "eventType" = 'pre_prompt_dismissed' THEN 1 END)::bigint AS "prePromptDismissed",
+        CASE WHEN COUNT(CASE WHEN "eventType" = 'pre_prompt_shown' THEN 1 END) > 0
+          THEN ROUND(
+            COUNT(CASE WHEN "eventType" = 'pre_prompt_confirmed' THEN 1 END)::numeric /
+            COUNT(CASE WHEN "eventType" = 'pre_prompt_shown'     THEN 1 END)::numeric * 100, 2)
           ELSE 0 END AS "tapThroughRate"
-      FROM tap_through_daily
-      WHERE "appId" = ${appId} AND date >= ${from} AND date <= ${to} AND "appVersion" = ${version}
-      GROUP BY date::date ORDER BY date::date
+      FROM "Event"
+      WHERE "appId" = ${appId} AND "holdout" = ${holdout}
+        AND "timestamp" >= ${from} AND "timestamp" <= ${to}
+        AND "appVersion" = ${version}
+      GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
     `;
   }
   return prisma.$queryRaw<TapThroughRow[]>`
-    SELECT date::date AS date,
-      SUM("prePromptShown")::bigint AS "prePromptShown",
-      SUM("prePromptConfirmed")::bigint AS "prePromptConfirmed",
-      SUM("prePromptDismissed")::bigint AS "prePromptDismissed",
-      CASE WHEN SUM("prePromptShown") > 0
-        THEN ROUND((SUM("prePromptConfirmed")::numeric / SUM("prePromptShown")::numeric) * 100, 2)
+    SELECT DATE_TRUNC('day', "timestamp")::date AS date,
+      COUNT(CASE WHEN "eventType" = 'pre_prompt_shown'     THEN 1 END)::bigint AS "prePromptShown",
+      COUNT(CASE WHEN "eventType" = 'pre_prompt_confirmed' THEN 1 END)::bigint AS "prePromptConfirmed",
+      COUNT(CASE WHEN "eventType" = 'pre_prompt_dismissed' THEN 1 END)::bigint AS "prePromptDismissed",
+      CASE WHEN COUNT(CASE WHEN "eventType" = 'pre_prompt_shown' THEN 1 END) > 0
+        THEN ROUND(
+          COUNT(CASE WHEN "eventType" = 'pre_prompt_confirmed' THEN 1 END)::numeric /
+          COUNT(CASE WHEN "eventType" = 'pre_prompt_shown'     THEN 1 END)::numeric * 100, 2)
         ELSE 0 END AS "tapThroughRate"
-    FROM tap_through_daily
-    WHERE "appId" = ${appId} AND date >= ${from} AND date <= ${to}
-    GROUP BY date::date ORDER BY date::date
+    FROM "Event"
+    WHERE "appId" = ${appId} AND "holdout" = ${holdout}
+      AND "timestamp" >= ${from} AND "timestamp" <= ${to}
+    GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
   `;
 }
 
-async function queryEventCounts(appId: string, eventType: string, from: Date, to: Date, version?: string): Promise<EventCountRow[]> {
+async function queryEventCounts(appId: string, eventType: string, from: Date, to: Date, holdout: boolean, version?: string): Promise<EventCountRow[]> {
   if (version) {
     return prisma.$queryRaw<EventCountRow[]>`
       SELECT DATE_TRUNC('day', "timestamp")::date AS date, COUNT(*)::bigint AS count
       FROM "Event"
-      WHERE "appId" = ${appId} AND "eventType" = ${eventType}
+      WHERE "appId" = ${appId} AND "eventType" = ${eventType} AND "holdout" = ${holdout}
         AND "timestamp" >= ${from} AND "timestamp" <= ${to} AND "appVersion" = ${version}
       GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
     `;
@@ -90,31 +98,33 @@ async function queryEventCounts(appId: string, eventType: string, from: Date, to
   return prisma.$queryRaw<EventCountRow[]>`
     SELECT DATE_TRUNC('day', "timestamp")::date AS date, COUNT(*)::bigint AS count
     FROM "Event"
-    WHERE "appId" = ${appId} AND "eventType" = ${eventType}
+    WHERE "appId" = ${appId} AND "eventType" = ${eventType} AND "holdout" = ${holdout}
       AND "timestamp" >= ${from} AND "timestamp" <= ${to}
     GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
   `;
 }
 
-async function queryGeo(appId: string, from: Date, to: Date): Promise<GeoRow[]> {
+async function queryGeo(appId: string, from: Date, to: Date, holdout: boolean): Promise<GeoRow[]> {
   return prisma.$queryRaw<GeoRow[]>`
     SELECT COALESCE("resolvedLocale", locale) AS "resolvedLocale",
       COUNT(CASE WHEN "eventType" = 'pre_prompt_shown'     THEN 1 END)::bigint AS shown,
       COUNT(CASE WHEN "eventType" = 'pre_prompt_confirmed' THEN 1 END)::bigint AS confirmed
     FROM "Event"
-    WHERE "appId" = ${appId} AND "timestamp" >= ${from} AND "timestamp" <= ${to}
+    WHERE "appId" = ${appId} AND "holdout" = ${holdout}
+      AND "timestamp" >= ${from} AND "timestamp" <= ${to}
     GROUP BY COALESCE("resolvedLocale", locale) ORDER BY shown DESC LIMIT 20
   `;
 }
 
-async function queryRpi(appId: string, from: Date, to: Date, version?: string): Promise<RpiRow[]> {
+async function queryRpi(appId: string, from: Date, to: Date, holdout: boolean, version?: string): Promise<RpiRow[]> {
   if (version) {
     return prisma.$queryRaw<RpiRow[]>`
       SELECT DATE_TRUNC('day', "timestamp")::date AS date,
         COUNT(CASE WHEN "eventType" = 'native_prompt_requested' THEN 1 END)::bigint AS "nativePromptRequested",
         COUNT(CASE WHEN "eventType" = 'first_open'              THEN 1 END)::bigint AS "firstOpen"
       FROM "Event"
-      WHERE "appId" = ${appId} AND "timestamp" >= ${from} AND "timestamp" <= ${to} AND "appVersion" = ${version}
+      WHERE "appId" = ${appId} AND "holdout" = ${holdout}
+        AND "timestamp" >= ${from} AND "timestamp" <= ${to} AND "appVersion" = ${version}
       GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
     `;
   }
@@ -123,8 +133,23 @@ async function queryRpi(appId: string, from: Date, to: Date, version?: string): 
       COUNT(CASE WHEN "eventType" = 'native_prompt_requested' THEN 1 END)::bigint AS "nativePromptRequested",
       COUNT(CASE WHEN "eventType" = 'first_open'              THEN 1 END)::bigint AS "firstOpen"
     FROM "Event"
-    WHERE "appId" = ${appId} AND "timestamp" >= ${from} AND "timestamp" <= ${to}
+    WHERE "appId" = ${appId} AND "holdout" = ${holdout}
+      AND "timestamp" >= ${from} AND "timestamp" <= ${to}
     GROUP BY DATE_TRUNC('day', "timestamp")::date ORDER BY date
+  `;
+}
+
+// Aggregate comparison across both groups for the overview dashboard baseline widget.
+async function queryHoldoutStats(appId: string, from: Date, to: Date): Promise<HoldoutStatsRow[]> {
+  return prisma.$queryRaw<HoldoutStatsRow[]>`
+    SELECT
+      "holdout",
+      COUNT(DISTINCT "deviceId")::bigint                                          AS "deviceCount",
+      COUNT(CASE WHEN "eventType" = 'native_prompt_requested' THEN 1 END)::bigint AS "nativeCount",
+      COUNT(CASE WHEN "eventType" = 'first_open'              THEN 1 END)::bigint AS "firstOpenCount"
+    FROM "Event"
+    WHERE "appId" = ${appId} AND "timestamp" >= ${from} AND "timestamp" <= ${to}
+    GROUP BY "holdout"
   `;
 }
 
@@ -139,6 +164,8 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
     const from = parseDate(q.from, daysAgo(30));
     const to = parseDate(q.to, new Date());
     const version = q.version || undefined;
+    // group defaults to treatment; holdout group is opted-in explicitly
+    const holdout = q.group === 'holdout';
 
     if (metric === 'versions') {
       const rows = await prisma.$queryRaw<{ appVersion: string }[]>`
@@ -148,7 +175,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
     }
 
     if (metric === 'tap_through') {
-      const rows = await queryTapThrough(appId, from, to, version);
+      const rows = await queryTapThrough(appId, from, to, holdout, version);
       return reply.send({
         series: rows.map(r => ({
           date: (r.date as Date).toISOString().split('T')[0],
@@ -162,7 +189,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
 
     if (metric === 'event_counts') {
       const eventType = q.eventType ?? 'pre_prompt_shown';
-      const rows = await queryEventCounts(appId, eventType, from, to, version);
+      const rows = await queryEventCounts(appId, eventType, from, to, holdout, version);
       return reply.send({
         series: rows.map(r => ({
           date: (r.date as Date).toISOString().split('T')[0],
@@ -172,7 +199,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
     }
 
     if (metric === 'geo_breakdown') {
-      const rows = await queryGeo(appId, from, to);
+      const rows = await queryGeo(appId, from, to, holdout);
       return reply.send({
         rows: rows.map(r => ({
           locale: r.resolvedLocale,
@@ -186,7 +213,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
     }
 
     if (metric === 'reviews_per_install') {
-      const rows = await queryRpi(appId, from, to, version);
+      const rows = await queryRpi(appId, from, to, holdout, version);
       const series = rows.map(r => ({
         date: (r.date as Date).toISOString().split('T')[0],
         nativePromptRequested: Number(r.nativePromptRequested),
@@ -204,6 +231,31 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
       });
     }
 
+    // Returns aggregate stats for both groups — used by the overview baseline comparison widget.
+    // Response: { hasBaseline, treatment: { devices, nativeRate }, holdout: { devices, nativeRate } }
+    if (metric === 'holdout_stats') {
+      const rows = await queryHoldoutStats(appId, from, to);
+      const byGroup = (h: boolean) => rows.find(r => r.holdout === h);
+      const BASELINE_MIN_DEVICES = 50;
+
+      const treatRow = byGroup(false);
+      const holdRow  = byGroup(true);
+
+      const treatDevices = Number(treatRow?.deviceCount ?? 0n);
+      const holdDevices  = Number(holdRow?.deviceCount  ?? 0n);
+
+      const nativeRate = (row: HoldoutStatsRow | undefined) => {
+        if (!row || row.firstOpenCount === 0n) return 0;
+        return Math.round((Number(row.nativeCount) / Number(row.firstOpenCount)) * 10000) / 100;
+      };
+
+      return reply.send({
+        hasBaseline: holdDevices >= BASELINE_MIN_DEVICES,
+        treatment: { devices: treatDevices, nativeRate: nativeRate(treatRow) },
+        holdout:   { devices: holdDevices,  nativeRate: nativeRate(holdRow)  },
+      });
+    }
+
     return reply.code(400).send({ error: 'unknown_metric' });
   });
 
@@ -218,11 +270,12 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
     const from = parseDate(q.from, daysAgo(30));
     const to = parseDate(q.to, new Date());
     const version = q.version || undefined;
+    const holdout = q.group === 'holdout';
 
     let csv = '';
 
     if (metric === 'tap_through') {
-      const rows = await queryTapThrough(appId, from, to, version);
+      const rows = await queryTapThrough(appId, from, to, holdout, version);
       const mapped = rows.map(r => ({
         date: (r.date as Date).toISOString().split('T')[0],
         tapThroughRate: Number(r.tapThroughRate),
@@ -232,7 +285,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
       }));
       csv = toCSV(['date', 'tapThroughRate', 'prePromptShown', 'prePromptConfirmed', 'prePromptDismissed'], mapped);
     } else if (metric === 'geo_breakdown') {
-      const rows = await queryGeo(appId, from, to);
+      const rows = await queryGeo(appId, from, to, holdout);
       const mapped = rows.map(r => ({
         locale: r.resolvedLocale,
         region: regionFromLocale(r.resolvedLocale),
@@ -242,7 +295,7 @@ export async function registerAdminMetricsRoutes(app: FastifyInstance): Promise<
       }));
       csv = toCSV(['locale', 'region', 'shown', 'confirmed', 'tapThroughRate'], mapped);
     } else if (metric === 'reviews_per_install') {
-      const rows = await queryRpi(appId, from, to, version);
+      const rows = await queryRpi(appId, from, to, holdout, version);
       const mapped = rows.map(r => ({
         date: (r.date as Date).toISOString().split('T')[0],
         nativePromptRequested: Number(r.nativePromptRequested),

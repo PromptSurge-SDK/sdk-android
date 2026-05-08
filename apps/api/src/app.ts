@@ -19,6 +19,7 @@ import { registerAdminSubscriptionRoutes } from './routes/adminSubscription.js';
 import { registerAdminOrgRoutes } from './routes/adminOrg.js';
 import { registerAdminInviteRoutes } from './routes/adminInvite.js';
 import { registerAdminAccountRoutes } from './routes/adminAccount.js';
+import { registerAdminAppearanceRoutes } from './routes/adminAppearance.js';
 
 const VERSION = process.env.npm_package_version ?? '0.0.1';
 
@@ -63,6 +64,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAdminOrgRoutes(app);
   await registerAdminInviteRoutes(app);
   await registerAdminAccountRoutes(app);
+  await registerAdminAppearanceRoutes(app);
   // Webhook route registered as a scoped plugin (has its own content-type parser)
   await app.register(registerLsWebhookRoute);
   await registerEventsRoute(app);

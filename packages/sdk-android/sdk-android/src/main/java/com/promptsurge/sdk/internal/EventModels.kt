@@ -23,6 +23,7 @@ internal data class EventDto(
     val sdkVersion: String,
     val locale: String,
     val platform: String,
+    val holdout: Boolean = false,
     val payload: JsonObject = buildJsonObject {},
 )
 

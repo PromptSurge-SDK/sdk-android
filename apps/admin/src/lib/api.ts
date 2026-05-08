@@ -46,6 +46,8 @@ async function apiFetch<T>(
 export interface Developer {
   id: string;
   email: string;
+  firstName: string | null;
+  lastName: string | null;
   createdAt: string;
 }
 
@@ -54,11 +56,15 @@ export interface Session {
   developer: Developer;
 }
 
-export function signup(email: string, password: string): Promise<Session> {
+export function signup(email: string, password: string, firstName: string, lastName: string): Promise<Session> {
   return apiFetch('/admin/signup', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, firstName, lastName }),
   });
+}
+
+export function updateProfile(token: string, firstName: string, lastName: string): Promise<{ firstName: string | null; lastName: string | null }> {
+  return apiFetch('/admin/me', { method: 'PATCH', token, body: JSON.stringify({ firstName, lastName }) });
 }
 
 export function login(email: string, password: string): Promise<Session> {
@@ -264,6 +270,33 @@ export function permanentlyDeleteApp(token: string, appId: string): Promise<{ ok
 export type SubscriptionTier = 'indie' | 'startup' | 'growth' | 'enterprise';
 export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'paused';
 
+export interface AppDialogTheme {
+  presetId: string;
+  accentColor: string | null;
+  backgroundColor: string | null;
+  textColor: string | null;
+  buttonTextColor: string | null;
+  resolved: {
+    presetId: string;
+    accentColor: string;
+    backgroundColor: string;
+    textColor: string;
+    buttonTextColor: string;
+  };
+}
+
+export function getDialogTheme(token: string, appId: string): Promise<AppDialogTheme> {
+  return apiFetch(`/admin/apps/${appId}/appearance`, { token });
+}
+
+export function updateDialogTheme(
+  token: string,
+  appId: string,
+  data: { presetId: string; accentColor?: string | null; backgroundColor?: string | null; textColor?: string | null; buttonTextColor?: string | null },
+): Promise<AppDialogTheme> {
+  return apiFetch(`/admin/apps/${appId}/appearance`, { token, method: 'PUT', body: JSON.stringify(data) });
+}
+
 export interface AppSubscription {
   tier: SubscriptionTier;
   tierLabel: string;
@@ -293,6 +326,26 @@ export async function getCheckoutUrl(
 
 export function cancelSubscription(token: string, appId: string): Promise<{ ok: boolean }> {
   return apiFetch(`/admin/apps/${appId}/subscription/cancel`, { method: 'POST', token });
+}
+
+export async function getSubscriptionPortalUrl(token: string, appId: string): Promise<string> {
+  const data = await apiFetch<{ portalUrl: string }>(`/admin/apps/${appId}/subscription/portal`, { token });
+  return data.portalUrl;
+}
+
+export interface SubscriptionInvoice {
+  id: string;
+  billingReason: string;
+  createdAt: string;
+  total: number;
+  currency: string;
+  status: string;
+  invoicePdfUrl: string | null;
+}
+
+export async function getSubscriptionInvoices(token: string, appId: string): Promise<SubscriptionInvoice[]> {
+  const data = await apiFetch<{ invoices: SubscriptionInvoice[] }>(`/admin/apps/${appId}/subscription/invoices`, { token });
+  return data.invoices;
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -651,36 +704,49 @@ export interface RpiSummary {
 }
 
 export function getMetricTapThrough(
-  token: string, appId: string, from: string, to: string, version?: string
+  token: string, appId: string, from: string, to: string, version?: string, group?: 'treatment' | 'holdout'
 ): Promise<{ series: TapThroughPoint[] }> {
-  const qs = new URLSearchParams({ metric: 'tap_through', from, to, ...(version ? { version } : {}) });
+  const qs = new URLSearchParams({ metric: 'tap_through', from, to, ...(version ? { version } : {}), ...(group ? { group } : {}) });
   return apiFetch(`/admin/apps/${appId}/metrics?${qs}`, { token });
 }
 
 export function getMetricEventCounts(
-  token: string, appId: string, from: string, to: string, eventType: string, version?: string
+  token: string, appId: string, from: string, to: string, eventType: string, version?: string, group?: 'treatment' | 'holdout'
 ): Promise<{ series: EventCountPoint[] }> {
-  const qs = new URLSearchParams({ metric: 'event_counts', from, to, eventType, ...(version ? { version } : {}) });
+  const qs = new URLSearchParams({ metric: 'event_counts', from, to, eventType, ...(version ? { version } : {}), ...(group ? { group } : {}) });
   return apiFetch(`/admin/apps/${appId}/metrics?${qs}`, { token });
 }
 
 export function getMetricGeo(
-  token: string, appId: string, from: string, to: string
+  token: string, appId: string, from: string, to: string, group?: 'treatment' | 'holdout'
 ): Promise<{ rows: GeoRow[] }> {
-  const qs = new URLSearchParams({ metric: 'geo_breakdown', from, to });
+  const qs = new URLSearchParams({ metric: 'geo_breakdown', from, to, ...(group ? { group } : {}) });
   return apiFetch(`/admin/apps/${appId}/metrics?${qs}`, { token });
 }
 
 export function getMetricRpi(
-  token: string, appId: string, from: string, to: string, version?: string
+  token: string, appId: string, from: string, to: string, version?: string, group?: 'treatment' | 'holdout'
 ): Promise<RpiSummary> {
-  const qs = new URLSearchParams({ metric: 'reviews_per_install', from, to, ...(version ? { version } : {}) });
+  const qs = new URLSearchParams({ metric: 'reviews_per_install', from, to, ...(version ? { version } : {}), ...(group ? { group } : {}) });
   return apiFetch(`/admin/apps/${appId}/metrics?${qs}`, { token });
 }
 
 export async function getMetricVersions(token: string, appId: string): Promise<string[]> {
   const data = await apiFetch<{ versions: string[] }>(`/admin/apps/${appId}/metrics?metric=versions`, { token });
   return data.versions;
+}
+
+export interface HoldoutStats {
+  hasBaseline: boolean;
+  treatment: { devices: number; nativeRate: number };
+  holdout: { devices: number; nativeRate: number };
+}
+
+export function getMetricHoldoutStats(
+  token: string, appId: string, from: string, to: string
+): Promise<HoldoutStats> {
+  const qs = new URLSearchParams({ metric: 'holdout_stats', from, to });
+  return apiFetch(`/admin/apps/${appId}/metrics?${qs}`, { token });
 }
 
 export function metricsExportUrl(
@@ -704,7 +770,7 @@ export interface OrgInfo {
 export interface OrgMember {
   id: string;
   role: OrgRole;
-  developer: { id: string; email: string };
+  developer: { id: string; email: string; firstName: string | null; lastName: string | null };
 }
 
 export interface OrgInvite {

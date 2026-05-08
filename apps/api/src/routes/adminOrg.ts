@@ -48,7 +48,7 @@ export async function registerAdminOrgRoutes(app: FastifyInstance): Promise<void
     const org = await getOrCreateDeveloperOrg(dev.id);
     const members = await prisma.organizationMember.findMany({
       where: { organizationId: org.id },
-      include: { developer: { select: { id: true, email: true, createdAt: true } } },
+      include: { developer: { select: { id: true, email: true, firstName: true, lastName: true, createdAt: true } } },
       orderBy: { joinedAt: 'asc' },
     });
     return reply.send({
@@ -59,6 +59,8 @@ export async function registerAdminOrgRoutes(app: FastifyInstance): Promise<void
         developer: {
           id: m.developer.id,
           email: m.developer.email,
+          firstName: m.developer.firstName,
+          lastName: m.developer.lastName,
           createdAt: m.developer.createdAt.toISOString(),
         },
       })),
@@ -162,6 +164,35 @@ export async function registerAdminOrgRoutes(app: FastifyInstance): Promise<void
         inviteUrl: `${ADMIN_BASE_URL}/invite/${i.token}`,
       })),
     });
+  });
+
+  // PATCH /admin/org/members/:memberId  (owner only — update member's name)
+  app.patch('/admin/org/members/:memberId', { preHandler: requireDeveloper }, async (request, reply) => {
+    const { memberId } = request.params as { memberId: string };
+    const dev = request.developer!;
+    const org = await getOrCreateDeveloperOrg(dev.id);
+
+    if (!await requireOwner(org.id, dev.id)) {
+      return reply.code(403).send({ error: 'owner_required' });
+    }
+
+    const Body = z.object({
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
+    });
+    const parsed = Body.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
+
+    const target = await prisma.organizationMember.findFirst({
+      where: { id: memberId, organizationId: org.id },
+    });
+    if (!target) return reply.code(404).send({ error: 'member_not_found' });
+
+    const updated = await prisma.developer.update({
+      where: { id: target.developerId },
+      data: { firstName: parsed.data.firstName, lastName: parsed.data.lastName },
+    });
+    return reply.send({ firstName: updated.firstName, lastName: updated.lastName });
   });
 
   // DELETE /admin/org/invites/:id — revoke

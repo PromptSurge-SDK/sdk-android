@@ -82,8 +82,34 @@ object PromptSurge {
             return
         }
 
+        // App was soft-deleted server-side — suppress pre-prompt entirely.
+        if (promptRepo?.isAppDeleted() == true) {
+            Log.d(TAG, "requestReview: app deleted server-side, suppressing pre-prompt.")
+            return
+        }
+
         val manager = ReviewManagerFactory.create(ctx)
         val tel = telemetry
+
+        // Holdout group — skip the pre-prompt dialog but still attempt the native IAR
+        // so we can measure the natural review rate as a baseline.
+        if (tel?.isInHoldout() == true) {
+            Log.d(TAG, "requestReview: holdout group — skipping dialog, attempting native IAR.")
+            manager.requestReviewFlow().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    manager.launchReviewFlow(activity, task.result)
+                        .addOnCompleteListener {
+                            tel.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
+                            rateLimiter.recordShown()
+                        }
+                } else {
+                    Log.w(TAG, "requestReviewFlow (holdout) failed: ${task.exception?.message}")
+                    rateLimiter.recordShown()
+                }
+            }
+            return
+        }
+
         val text: PromptText = promptRepo?.getCachedOrDefaults()
             ?: com.promptsurge.sdk.internal.PromptDefaults.asPromptText()
         val localePayload = buildJsonObject { put("resolvedLocale", text.locale) }

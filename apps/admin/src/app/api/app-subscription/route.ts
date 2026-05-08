@@ -3,20 +3,27 @@ import { getSessionToken } from '@/lib/session';
 
 const API = process.env.PROMPTSURGE_API_URL ?? 'http://localhost:3000';
 
-// GET /api/app-subscription?appId=xxx
+// GET /api/app-subscription?appId=xxx[&sub=checkout|portal|invoices][&tier=xxx]
 export async function GET(req: NextRequest) {
   const token = getSessionToken();
   if (!token) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const appId = req.nextUrl.searchParams.get('appId');
-  const sub   = req.nextUrl.searchParams.get('sub'); // 'checkout' or 'cancel' — handled below
+  const sub   = req.nextUrl.searchParams.get('sub');
   const tier  = req.nextUrl.searchParams.get('tier');
 
   if (!appId) return NextResponse.json({ error: 'missing_app_id' }, { status: 400 });
 
-  const path = sub === 'checkout'
-    ? `/admin/apps/${appId}/subscription/checkout?tier=${tier ?? ''}`
-    : `/admin/apps/${appId}/subscription`;
+  let path: string;
+  if (sub === 'checkout') {
+    path = `/admin/apps/${appId}/subscription/checkout?tier=${tier ?? ''}`;
+  } else if (sub === 'portal') {
+    path = `/admin/apps/${appId}/subscription/portal`;
+  } else if (sub === 'invoices') {
+    path = `/admin/apps/${appId}/subscription/invoices`;
+  } else {
+    path = `/admin/apps/${appId}/subscription`;
+  }
 
   const res = await fetch(`${API}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
