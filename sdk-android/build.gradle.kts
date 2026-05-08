@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
+    id("maven-publish")
 }
 
 android {
@@ -17,7 +18,7 @@ android {
         buildConfigField(
             "String",
             "PROMPTSURGE_API_URL",
-            "\"http://10.0.2.2:3000\"",
+            "\"https://api.promptsurge.me\"",
         )
         buildConfigField("String", "SDK_VERSION", "\"0.0.1\"")
     }
@@ -69,4 +70,17 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "com.promptsurge"
+                artifactId = "sdk-android"
+                version = project.findProperty("VERSION_NAME") as String? ?: "0.1.0"
+            }
+        }
+    }
 }
