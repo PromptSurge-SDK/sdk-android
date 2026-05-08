@@ -160,17 +160,55 @@ pnpm --filter api db:studio      # open Prisma Studio (visual DB browser)
 ```
 promptsurge/
 ├── apps/
-│   ├── admin/                 Next.js 14 admin panel (M5+)
-│   └── api/                   Fastify API + Prisma (M2+)
+│   ├── admin/                 Next.js 14 admin panel
+│   │   └── src/
+│   │       ├── app/(dashboard)/apps/[id]/
+│   │       │   ├── page.tsx             Overview + subscription banners
+│   │       │   ├── metrics/             Analytics charts + geo breakdown
+│   │       │   ├── keywords/            Keyword management + audit log
+│   │       │   ├── prompts/             Prompt text editor
+│   │       │   ├── themes/              Review-driven themes (M6.5)
+│   │       │   ├── appearance/          Dialog visual theme editor (M18)
+│   │       │   ├── events/              Raw event log
+│   │       │   ├── llm-config/          BYOLLM provider setup
+│   │       │   ├── llm-usage/           LLM call log
+│   │       │   └── settings/            Billing, team
+│   │       └── components/
+│   │           ├── AppSidebar.tsx       Nav + subscription footer
+│   │           └── SubscriptionBanners.tsx  M19 warning banners
+│   └── api/                   Fastify API + Prisma
+│       ├── prisma/
+│       │   ├── schema.prisma
+│       │   └── migrations/
+│       └── src/routes/
+│           ├── adminAuth.ts
+│           ├── adminApps.ts
+│           ├── adminMetrics.ts
+│           ├── adminKeywords.ts
+│           ├── adminAppearance.ts
+│           ├── adminSubscription.ts
+│           ├── adminOrg.ts
+│           ├── events.ts
+│           ├── prompts.ts
+│           └── webhooks.ts
 ├── packages/
-│   ├── sdk-android/           Kotlin SDK (Android library) — Gradle root
+│   ├── sdk-android/           Kotlin SDK — Gradle root
+│   │   └── sdk-android/src/main/java/com/promptsurge/sdk/
+│   │       ├── PromptSurge.kt               Public API
+│   │       ├── PrePromptDialogFragment.kt   Dialog UI + theming
+│   │       └── internal/
+│   │           ├── PromptTextRepository.kt  Cache + fetch logic
+│   │           ├── PromptDefaults.kt        Bundled fallback copy
+│   │           ├── Telemetry.kt             Event queue + flush
+│   │           └── EventModels.kt
 │   ├── sample-app-android/    Test harness Android app
 │   └── shared-types/          Zod schemas shared between api + admin
 ├── docs/
-│   ├── api-contract.md        Single source of truth for SDK ↔ API wire format
-│   ├── conventions.md         Cross-cutting rules (auth, rate limits, PII, etc.)
+│   ├── handoff.md             Current-state session handoff ← START HERE
+│   ├── api-contract.md        SDK ↔ API wire format
+│   ├── conventions.md         Cross-cutting rules
 │   ├── data-model.md          Prisma model overview
-│   └── runbooks/              Operations, secret rotation, backup/DR
+│   └── deployment.md          Fly.io + Vercel deploy guide
 ├── .github/workflows/ci.yml   GitHub Actions: lint + typecheck + tests
 ├── docker-compose.yml         Postgres 16 for local dev
 └── pnpm-workspace.yaml
@@ -182,16 +220,29 @@ promptsurge/
 
 | Milestone | Status | Description |
 |-----------|--------|-------------|
-| M0 | Done | Repo skeleton (this commit) |
-| M1 | Next | Static pre-prompt → native review (Android) |
-| M2 | | Analytics events end-to-end |
-| M3 | | Auto-localization |
-| M4 | | Developer + app auth |
-| M5 | | Admin panel UI |
-| M6 | | Prompt customization + LLM assist |
-| M6.5 | | Review-driven theme amplification |
-| M7 | | Metrics dashboard |
-| M8 | | Marketing site |
-| M8.5 | | Production-readiness gate |
+| M0 | ✅ Done | Repo skeleton, toolchain, CI |
+| M1 | ✅ Done | Static pre-prompt → native review (Android SDK) |
+| M2 | ✅ Done | Analytics events end-to-end |
+| M3 | ✅ Done | Auto-localization (server-driven copy, locale fallback chain) |
+| M4 | ✅ Done | Developer + app auth (email/password + OAuth) |
+| M5 | ✅ Done | Admin panel UI (Next.js 14, full CRUD) |
+| M6 | ✅ Done | Prompt customization + BYOLLM keyword generation |
+| M6.5 | ✅ Done | Review-driven theme amplification |
+| M7 | ✅ Done | Metrics dashboard (impressions, TTR, RPI, geo, holdout) |
+| M8 | ⏳ Pending | Marketing landing page (promptsurge.me) |
+| M9 | ✅ Done | Billing integration (Lemon Squeezy, 3 paid tiers + indie) |
+| M10 | ✅ Done | Impression metering + enforcement |
+| M11 | ✅ Done | Google / GitHub OAuth login |
+| M12 | ✅ Done | Team / org invite system |
+| M13 | ✅ Done | Developer profile (name, avatar, password change, account delete) |
+| M14 | ✅ Done | Holdout group analytics |
+| M15 | ✅ Done | Billing portal + invoice history |
+| M16 | ✅ Done | App soft-delete, key rotation grace period |
+| M17 | ✅ Done | Keywords v2 (bulk add, ban list, audit log, CSV import/export) |
+| M18 | ✅ Done | Dialog visual themes (4 presets + custom overrides, SDK theming) |
+| M19 | ✅ Done | Sub-lapse warning banners (past_due, cancelled, limit warnings) |
+| M20 | 🔜 Next | Marketing landing page |
+| M21 | 🔜 Next | Android SDK publish (Maven Central / JitPack) |
+| M22 | 🔜 Next | Public launch |
 
-See [build plan](../PromptSurge_Build_Plan.md) for full milestone specs and Claude Code prompts.
+See [docs/handoff.md](docs/handoff.md) for full current state and next-session context.
