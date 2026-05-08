@@ -29,10 +29,10 @@ function Hero() {
       />
 
       <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6">
-        {/* Beta badge */}
+        {/* Live badge */}
         <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-teal-100 backdrop-blur-sm">
           <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          Free during beta
+          Free plan · no credit card required
         </div>
 
         {/* Logo mark in hero */}
@@ -223,132 +223,102 @@ function Pricing() {
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl" style={{ letterSpacing: '-0.025em' }}>
-            Free while we&apos;re in beta
+            Simple, usage-based pricing
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-gray-600">
-            Full access, no credit card, no time limit. After beta, plans scale with your impression volume.
+            Start free. Upgrade when your app grows.
+            Pricing is based on <strong>prompt impressions</strong> — one count per dialog shown.
           </p>
         </div>
 
-        {/* Current: Beta card */}
-        <div className="mt-12 rounded-2xl border-2 border-brand-600 bg-white p-8 shadow-lg">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200">
-                Current — beta
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              name: 'Indie',
+              price: 'Free',
+              priceSub: 'forever',
+              impressions: '500 prompt impressions / mo',
+              features: ['Pre-prompt dialog', 'Analytics dashboard', 'AI prompt generation', 'Community support'],
+              cta: 'Get started free',
+              ctaHref: `${ADMIN_URL}/signup`,
+              highlight: false,
+            },
+            {
+              name: 'Startup',
+              price: '$39',
+              priceSub: '/ month',
+              impressions: '10,000 prompt impressions / mo',
+              features: ['Everything in Indie', 'Analytics CSV export', 'Geo breakdown', 'Email support'],
+              cta: 'Start Startup',
+              ctaHref: `${ADMIN_URL}/signup`,
+              highlight: false,
+            },
+            {
+              name: 'Growth',
+              price: '$99',
+              priceSub: '/ month',
+              impressions: '100,000 prompt impressions / mo',
+              features: ['Everything in Startup', 'Priority support', 'Multiple team members', 'SLA guarantee'],
+              cta: 'Start Growth',
+              ctaHref: `${ADMIN_URL}/signup`,
+              highlight: true,
+            },
+            {
+              name: 'Enterprise',
+              price: 'Custom',
+              priceSub: 'contact us',
+              impressions: 'Unlimited prompt impressions',
+              features: ['Everything in Growth', 'Dedicated account manager', 'Custom SLA', 'Volume discounts'],
+              cta: 'Contact us',
+              ctaHref: 'mailto:hello@promptsurge.me',
+              highlight: false,
+            },
+          ].map(plan => (
+            <div
+              key={plan.name}
+              className={`flex flex-col rounded-2xl border bg-white p-6 ${
+                plan.highlight
+                  ? 'border-brand-500 shadow-lg ring-1 ring-brand-500'
+                  : 'border-gray-200 shadow-sm'
+              }`}
+            >
+              {plan.highlight && (
+                <div className="mb-3 inline-flex self-start rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200">
+                  Most popular
+                </div>
+              )}
+              <p className="text-base font-semibold text-gray-900">{plan.name}</p>
+              <div className="mt-3 flex items-baseline gap-1">
+                <span className="text-3xl font-black text-gray-900">{plan.price}</span>
+                <span className="text-sm text-gray-400">{plan.priceSub}</span>
               </div>
-              <p className="mt-2 text-2xl font-bold text-gray-900">Full access</p>
-              <p className="mt-1 text-gray-500">Everything included, completely free for early adopters</p>
-            </div>
-            <div className="text-right">
-              <p className="text-4xl font-black text-brand-600">$0</p>
-              <p className="text-sm text-gray-400">/ month</p>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-6 sm:grid-cols-2">
-            {[
-              {
-                category: 'SDK & ingestion',
-                items: [
-                  'Android SDK (iOS coming soon)',
-                  'Unlimited prompt impressions',
-                  'Unlimited event ingestion',
-                  'Apple guideline 5.6.1 compliant',
-                  'Device-level opt-out API',
-                ],
-              },
-              {
-                category: 'AI & prompts',
-                items: [
-                  'AI prompt generation (bring your own LLM key)',
-                  'OpenAI, Anthropic, Gemini support',
-                  'Review theme extraction from paste',
-                  'Multi-locale prompt texts',
-                  'Up to 10 theme analyses / day / app',
-                ],
-              },
-              {
-                category: 'Analytics',
-                items: [
-                  'Real-time metrics dashboard',
-                  'Tap-through rate tracking',
-                  'GEO breakdown (top 20 locales)',
-                  'Per-version breakdown',
-                  'CSV export for all charts',
-                ],
-              },
-              {
-                category: 'Platform',
-                items: [
-                  'Unlimited apps',
-                  'Unlimited team members per app',
-                  'API key rotation',
-                  'LLM cost logging',
-                  'Email support',
-                ],
-              },
-            ].map(group => (
-              <div key={group.category}>
-                <p className="mb-3 text-sm font-semibold text-gray-700">{group.category}</p>
-                <ul className="space-y-2">
-                  {group.items.map(item => (
-                    <li key={item} className="flex items-center gap-2 text-sm text-gray-600">
-                      {CHECK}
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <a
-            href={`${ADMIN_URL}/signup`}
-            className="mt-10 block rounded-xl bg-brand-600 px-6 py-4 text-center text-lg font-semibold text-white hover:bg-brand-700 transition-colors"
-          >
-            Create a free account →
-          </a>
-        </div>
-
-        {/* Upcoming tiers — teaser */}
-        <div className="mt-10">
-          <p className="mb-4 text-center text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Upcoming paid tiers (post-beta)
-          </p>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              { name: 'Indie',      impressions: '2,500 / mo',   note: 'Free forever',      highlight: false },
-              { name: 'Startup',    impressions: '30,000 / mo',  note: 'Pricing TBD',        highlight: false },
-              { name: 'Growth',     impressions: '250,000 / mo', note: 'Pricing TBD',        highlight: false },
-            ].map(tier => (
-              <div
-                key={tier.name}
-                className="rounded-xl border border-gray-200 bg-white px-5 py-4 text-center"
+              <p className="mt-1 text-xs font-medium text-brand-600">{plan.impressions}</p>
+              <ul className="mt-5 flex-1 space-y-2">
+                {plan.features.map(f => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
+                    {CHECK}
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={plan.ctaHref}
+                className={`mt-6 block rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
+                  plan.highlight
+                    ? 'bg-brand-600 text-white hover:bg-brand-700'
+                    : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                <p className="font-semibold text-gray-900">{tier.name}</p>
-                <p className="mt-1 text-2xl font-bold text-brand-600">{tier.impressions}</p>
-                <p className="mt-1 text-xs text-gray-400">{tier.note}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-center text-xs text-gray-400">
-            Enterprise (unlimited) available on request ·{' '}
-            <a href="mailto:hello@promptsurge.me" className="text-brand-600 hover:underline">
-              hello@promptsurge.me
-            </a>
-          </p>
+                {plan.cta}
+              </a>
+            </div>
+          ))}
         </div>
 
-        {/* Guarantee */}
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 text-center">
-          <p className="font-semibold text-gray-900">Our beta promise</p>
-          <p className="mt-1 text-sm text-gray-600">
-            We&apos;ll give at least <strong>30 days notice</strong> before any paid tiers go live.
-            Early adopters who provide feedback will receive preferred pricing.
-            We are not planning to remove a free tier.
-          </p>
-        </div>
+        <p className="mt-6 text-center text-xs text-gray-400">
+          Annual billing saves ~20% · All plans include a free 14-day trial on first upgrade ·{' '}
+          <a href="/pricing" className="text-brand-600 hover:underline">Full plan comparison →</a>
+        </p>
       </div>
     </section>
   );
@@ -382,8 +352,8 @@ const FAQS = [
     a: 'You paste your existing app store reviews into the dashboard. The AI (using your own LLM key) identifies recurring praise themes — e.g. "offline mode", "fast sync", "clean UI" — and writes pre-prompts that mention those themes naturally. You review and accept the ones you want to use. Review text is processed in memory and never stored.',
   },
   {
-    q: 'What happens after the beta ends?',
-    a: 'We will give at least 30 days notice before any pricing changes. Early adopters who provide feedback during beta will receive preferred pricing. We intend to keep a free Indie tier (2,500 impressions/month) permanently.',
+    q: 'Is there a free plan?',
+    a: 'The Indie tier is free forever — no credit card, no time limit. Paid tiers (Startup at $39/mo, Growth at $99/mo) unlock higher prompt impression volumes and additional features. See the pricing page for a full breakdown.',
   },
 ];
 

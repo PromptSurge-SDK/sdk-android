@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://promptsurge.me'),
   openGraph: {
     title: 'PromptSurge — Turn app users into reviewers',
-    description: 'AI-powered review prompts for Android and iOS apps. Free during beta.',
+    description: 'AI-powered review prompts for Android and iOS apps. Free plan available.',
     url: 'https://promptsurge.me',
     siteName: 'PromptSurge',
     type: 'website',
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'PromptSurge — Turn app users into reviewers',
-    description: 'AI-powered review prompts for Android and iOS apps. Free during beta.',
+    description: 'AI-powered review prompts for Android and iOS apps. Free plan available.',
   },
 };
 
