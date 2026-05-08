@@ -1,11 +1,16 @@
 package com.promptsurge.sdk
 
 import android.app.Dialog
+import android.content.DialogInterface
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
 import coil.load
@@ -31,7 +36,8 @@ internal class PrePromptDialogFragment : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val cfg = listener ?: DefaultConfig
-        val imageUrl = PromptSurge.promptRepo?.getCachedOrDefaults()?.imageUrl
+        val promptData = PromptSurge.promptRepo?.getCachedOrDefaults()
+        val imageUrl = promptData?.imageUrl
 
         val builder = MaterialAlertDialogBuilder(requireContext())
             .setTitle(cfg.title)
@@ -59,6 +65,45 @@ internal class PrePromptDialogFragment : DialogFragment() {
         }
 
         return builder.create()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val theme = PromptSurge.promptRepo?.getCachedOrDefaults()?.theme ?: return
+        if (theme.presetId == "default") return
+
+        val alertDialog = dialog as? AlertDialog ?: return
+        runCatching {
+            val bgColor = Color.parseColor(theme.backgroundColor)
+            val accentColor = Color.parseColor(theme.accentColor)
+            val textColor = Color.parseColor(theme.textColor)
+            val btnTextColor = Color.parseColor(theme.buttonTextColor)
+
+            // Dialog window background: rounded rectangle matching Material3 dialog shape (28dp)
+            val cornerPx = (28f * resources.displayMetrics.density)
+            val bgDrawable = GradientDrawable().apply {
+                setColor(bgColor)
+                cornerRadius = cornerPx
+            }
+            alertDialog.window?.setBackgroundDrawable(bgDrawable)
+
+            // Positive button: filled accent
+            alertDialog.getButton(DialogInterface.BUTTON_POSITIVE)?.apply {
+                setTextColor(btnTextColor)
+                setBackgroundColor(accentColor)
+            }
+
+            // Negative button: text-only in accent color
+            alertDialog.getButton(DialogInterface.BUTTON_NEGATIVE)?.setTextColor(accentColor)
+
+            // Title text color
+            val titleId = resources.getIdentifier("alertTitle", "id", "android")
+            alertDialog.findViewById<TextView>(titleId)?.setTextColor(textColor)
+
+            // Message text color
+            alertDialog.findViewById<TextView>(android.R.id.message)?.setTextColor(textColor)
+        }
+        // Silently swallow any theming error — the dialog still shows with default styling.
     }
 
     override fun onResume() {

@@ -45,6 +45,9 @@ internal class PromptTextRepository internal constructor(
     private val prefs by lazy {
         appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
+
+    /** Returns true if the server has signalled that this app has been deleted. */
+    fun isAppDeleted(): Boolean = prefs.getBoolean(KEY_APP_DELETED, false)
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -95,7 +98,13 @@ internal class PromptTextRepository internal constructor(
             return@withLock it
         }
 
-        val fetched = runCatching { fetch(locale) }.getOrNull()
+        val fetchResult = runCatching { fetch(locale) }
+        if (fetchResult.exceptionOrNull() is AppDeletedException) {
+            prefs.edit().putBoolean(KEY_APP_DELETED, true).apply()
+            Log.w(TAG, "App has been deleted server-side; pre-prompt will be suppressed.")
+            return@withLock PromptDefaults.asPromptText() // caller checks isAppDeleted() before showing
+        }
+        val fetched = fetchResult.getOrNull()
         if (fetched != null) {
             writeCache(locale, fetched, now)
             memCache = CachedPrompt(locale, now, fetched)
@@ -137,7 +146,9 @@ internal class PromptTextRepository internal constructor(
         val ctaConfirm = prefs.getString(KEY_CTA_CONFIRM, null) ?: return null
         val ctaDismiss = prefs.getString(KEY_CTA_DISMISS, null) ?: return null
         val imageUrl = prefs.getString(KEY_IMAGE_URL, null)
-        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl)
+        val themeJson = prefs.getString(KEY_THEME, null)
+        val theme = themeJson?.let { runCatching { json.decodeFromString(DialogTheme.serializer(), it) }.getOrNull() }
+        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme)
     }
 
     private fun writeCache(requestedLocale: String, text: PromptText, now: Long) {
@@ -149,6 +160,7 @@ internal class PromptTextRepository internal constructor(
             putString(KEY_CTA_CONFIRM, text.ctaConfirm)
             putString(KEY_CTA_DISMISS, text.ctaDismiss)
             if (text.imageUrl != null) putString(KEY_IMAGE_URL, text.imageUrl) else remove(KEY_IMAGE_URL)
+            if (text.theme != null) putString(KEY_THEME, json.encodeToString(DialogTheme.serializer(), text.theme)) else remove(KEY_THEME)
             putLong(KEY_CACHED_AT, now)
             apply()
         }
@@ -164,6 +176,7 @@ internal class PromptTextRepository internal constructor(
             ctaConfirm = parsed.ctaConfirm,
             ctaDismiss = parsed.ctaDismiss,
             imageUrl = parsed.imageUrl,
+            theme = parsed.theme,
         )
     }
 
@@ -171,6 +184,11 @@ internal class PromptTextRepository internal constructor(
     internal fun resetForTesting() {
         memCache = null
         prefs.edit().clear().apply()
+    }
+
+    /** Test-only: clear the app_deleted flag. */
+    internal fun clearAppDeletedForTesting() {
+        prefs.edit().remove(KEY_APP_DELETED).apply()
     }
 
     @Serializable
@@ -181,6 +199,7 @@ internal class PromptTextRepository internal constructor(
         val ctaConfirm: String,
         val ctaDismiss: String,
         val imageUrl: String? = null,
+        val theme: DialogTheme? = null,
     )
 
     private data class CachedPrompt(
@@ -205,6 +224,8 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_CTA_DISMISS = "cta_dismiss"
         private const val KEY_CACHED_AT = "cached_at"
         private const val KEY_IMAGE_URL = "image_url"
+        private const val KEY_APP_DELETED = "app_deleted"
+        private const val KEY_THEME = "dialog_theme"
 
         internal const val DEFAULT_TTL_MS: Long = 24L * 60 * 60 * 1000
 
@@ -228,6 +249,9 @@ internal class PromptTextRepository internal constructor(
     }
 }
 
+/** Thrown when the server responds 404 with error=app_deleted. */
+internal class AppDeletedException : Exception("app_deleted")
+
 internal class OkHttpGetClient(
     private val client: OkHttpClient,
     private val baseUrl: String,
@@ -241,6 +265,10 @@ internal class OkHttpGetClient(
             .get()
             .build()
         client.newCall(request).execute().use { resp ->
+            if (resp.code == 404) {
+                val body = resp.body?.string() ?: ""
+                if (body.contains("app_deleted")) throw AppDeletedException()
+            }
             if (!resp.isSuccessful) error("HTTP ${resp.code}")
             return resp.body?.string() ?: error("empty body")
         }

@@ -11,10 +11,14 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Thin façade in front of [EventBus] that owns session/device identity and the per-event
- * common fields (timestamp, appVersion, locale, …). Single source of truth for "what does an
- * event from this device look like" — keeps that knowledge out of [com.promptsurge.sdk.PromptSurge]
- * and out of the dialog fragment.
+ * Thin façade in front of [EventBus] that owns session/device identity, the per-event
+ * common fields, and holdout group assignment.
+ *
+ * Holdout assignment:
+ *   - Assigned once on first [create] call, persisted in SharedPreferences.
+ *   - 10% of installs are placed in the holdout group.
+ *   - All events from a holdout device carry holdout=true, allowing the API to compute
+ *     natural (no pre-prompt) native review rates as a baseline.
  */
 internal class Telemetry private constructor(
     private val appContext: Context,
@@ -22,7 +26,10 @@ internal class Telemetry private constructor(
     private val sessionId: String,
     private val deviceId: String,
     private val appVersion: String,
+    private val inHoldout: Boolean,
 ) {
+
+    fun isInHoldout(): Boolean = inHoldout
 
     fun fire(eventType: String, payload: JsonObject = buildJsonObject {}) {
         bus.enqueue(
@@ -36,6 +43,7 @@ internal class Telemetry private constructor(
                 sdkVersion = BuildConfig.SDK_VERSION,
                 locale = Locale.getDefault().toLanguageTag(),
                 platform = "android",
+                holdout = inHoldout,
             ).copy(payload = payload),
         )
     }
@@ -62,17 +70,34 @@ internal class Telemetry private constructor(
     companion object {
         private const val PREFS_NAME = "ps_telemetry"
         private const val KEY_FIRST_OPEN_FIRED = "first_open_fired"
+        private const val KEY_HOLDOUT_ASSIGNED = "holdout_assigned"
+        private const val KEY_IN_HOLDOUT = "in_holdout"
+        private const val HOLDOUT_RATE = 0.10 // 10% of installs
 
         fun create(context: Context, apiKey: String, busOverride: EventBus? = null): Telemetry {
             val appCtx = context.applicationContext
             val bus = busOverride ?: EventBus.create(apiKey)
             bus.start(appCtx)
+
+            val prefs = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val inHoldout = if (prefs.getBoolean(KEY_HOLDOUT_ASSIGNED, false)) {
+                prefs.getBoolean(KEY_IN_HOLDOUT, false)
+            } else {
+                val assigned = Math.random() < HOLDOUT_RATE
+                prefs.edit()
+                    .putBoolean(KEY_HOLDOUT_ASSIGNED, true)
+                    .putBoolean(KEY_IN_HOLDOUT, assigned)
+                    .apply()
+                assigned
+            }
+
             return Telemetry(
                 appContext = appCtx,
                 bus = bus,
                 sessionId = UUID.randomUUID().toString(),
                 deviceId = DeviceId.get(appCtx),
                 appVersion = readAppVersion(appCtx),
+                inHoldout = inHoldout,
             )
         }
 
