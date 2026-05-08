@@ -136,11 +136,12 @@ Next.js client components cannot call the Fastify API directly (no session token
 
 ## Subscription / billing rules
 
-- **Indie (free):** 500 impressions/month. Default for all new apps.
-- **Startup:** 10,000 impressions/month.
-- **Growth:** 100,000 impressions/month.
-- **Enterprise:** Unlimited.
-- Impression limit enforcement: the API checks `Event` count within the current `billingPeriodStart`–`billingPeriodEnd` on every `/v1/events` and `/v1/prompts` call. Over-limit apps get a `402` response; the SDK suppresses the dialog silently.
+- **Indie (free):** 500 prompt impressions/month. Default for all new apps.
+- **Startup:** 10,000 prompt impressions/month.
+- **Growth:** 100,000 prompt impressions/month.
+- **Enterprise:** Unlimited prompt impressions.
+- A "prompt impression" is one `pre_prompt_shown` event — i.e. the dialog was displayed to a user.
+- Limit enforcement: the API checks the `pre_prompt_shown` event count within the current `billingPeriodStart`–`billingPeriodEnd` window on every `/v1/prompts` call. Over-limit apps get a `402`; the SDK suppresses the dialog silently. A 10% overage grace is applied before the hard block (`GRACE_FACTOR = 1.10` in `tiers.ts`).
 - `lsSubscriptionId = null` → never paid (indie by default).
 - `lsSubscriptionId != null` + `tier = indie` + `status = active` → was on a paid plan, subscription expired/cancelled and was downgraded.
 

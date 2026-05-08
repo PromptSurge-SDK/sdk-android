@@ -274,12 +274,12 @@ export function AppSidebar({ appId, appName, apps, subscription }: Props) {
                 />
               </div>
               <p className="text-[10px] text-gray-400">
-                {subscription.impressions.toLocaleString()} / {subscription.limit!.toLocaleString()} impressions
+                {subscription.impressions.toLocaleString()} / {subscription.limit!.toLocaleString()} prompt impressions
               </p>
             </div>
           )}
           {isUnlimited && (
-            <p className="text-[10px] text-gray-400">Unlimited impressions</p>
+            <p className="text-[10px] text-gray-400">Unlimited prompt impressions</p>
           )}
         </div>
       )}

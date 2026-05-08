@@ -71,7 +71,7 @@ function buildBanners(subscription: AppSubscription | null, appId: string): Bann
         level: 'error',
         message: (
           <>
-            <strong>Impression limit reached.</strong> The pre-prompt is paused for new users this period.{' '}
+            <strong>Prompt impression limit reached.</strong> The pre-prompt is paused for new users this period.{' '}
             <Link href={billingHref} className="underline font-medium">Upgrade your plan</Link>
             {' '}to restore delivery.
           </>
@@ -82,8 +82,8 @@ function buildBanners(subscription: AppSubscription | null, appId: string): Bann
         level: 'warning',
         message: (
           <>
-            <strong>Approaching impression limit.</strong> You&apos;ve used{' '}
-            {subscription.impressions.toLocaleString()} of {subscription.limit.toLocaleString()} impressions ({pct}%) this period.{' '}
+            <strong>Approaching prompt impression limit.</strong> You&apos;ve used{' '}
+            {subscription.impressions.toLocaleString()} of {subscription.limit.toLocaleString()} prompt impressions ({pct}%) this period.{' '}
             <Link href={billingHref} className="underline font-medium">Upgrade</Link>
             {' '}to avoid interruption.
           </>

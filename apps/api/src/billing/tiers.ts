@@ -1,10 +1,10 @@
 import type { SubscriptionTier } from '@prisma/client';
 
-/** Monthly impression cap per tier (pre_prompt_shown events). */
+/** Monthly prompt-impression cap per tier (pre_prompt_shown events). */
 export const TIER_LIMITS: Record<SubscriptionTier, number> = {
-  indie:      2_500,
-  startup:    30_000,
-  growth:     250_000,
+  indie:        500,
+  startup:   10_000,
+  growth:   100_000,
   enterprise: Infinity,
 };
 
