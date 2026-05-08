@@ -14,18 +14,27 @@ Adds a polished pre-prompt dialog before the Google Play In-App Review flow, inc
 
 ## Installation
 
-Add the SDK to your module's `build.gradle.kts`:
+Add JitPack to your root `settings.gradle.kts` (or `build.gradle.kts`):
 
 ```kotlin
-dependencies {
-    implementation("com.promptsurge:sdk-android:0.1.0")
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
 }
 ```
 
-> **Local development:** While the SDK is not yet published to Maven, depend on the Gradle module directly:
-> ```kotlin
-> implementation(project(":sdk-android"))
-> ```
+Then add the SDK to your module's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.github.promptsurge:promptsurge:sdk-android-0.1.0")
+}
+```
+
+Replace `0.1.0` with the [latest release tag](https://github.com/promptsurge/promptsurge/releases).
 
 ---
 
