@@ -89,7 +89,8 @@ CNAME  cdn   <cloudfront-distribution-id>.cloudfront.net
 |----------|-------------|
 | `DATABASE_URL` | Supabase PostgreSQL connection string |
 | `ADMIN_ORIGIN` | `https://admin.promptsurge.me` (CORS allowlist) |
-| `SODIUM_PRIVATE_KEY` | Base64-encoded libsodium private key for LLM key encryption |
+| `LLM_KEY_ENCRYPTION_PRIVATE` | Base64-encoded libsodium private key for LLM key encryption |
+| `LLM_KEY_ENCRYPTION_PUBLIC` | Base64-encoded libsodium public key for LLM key encryption |
 | `S3_BUCKET` | S3 bucket name for image uploads |
 | `S3_REGION` | AWS region (e.g. `us-east-1`) |
 | `AWS_ACCESS_KEY_ID` | AWS credential for S3 uploads |
@@ -107,18 +108,30 @@ CNAME  cdn   <cloudfront-distribution-id>.cloudfront.net
 
 ---
 
-## Deployment commands
+## Automatic deployment (GitHub Actions)
 
-### API
+Push to `master` triggers `.github/workflows/deploy.yml`, which deploys admin and marketing to Vercel in parallel. The workflow requires four repository secrets — set them once in **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `VERCEL_TOKEN` | `vca_0Yyjt7vxbDZU7OiMbgkVCcxKBbH4NI5s4AAwMGQdO8ecJg5TKT1AhFEF` |
+| `VERCEL_ORG_ID` | `team_1BbvpAqtIeiXXRBG09BvLQ7i` |
+| `VERCEL_PROJECT_ID_ADMIN` | `prj_4fyi1g2IX1qd4BmanDXpoJ5VpLvA` |
+| `VERCEL_PROJECT_ID_MARKETING` | `prj_l6J2SQZAbZwAJg4P2fy1B0d9pYBG` |
+
+The API (Fly.io) is not yet in the deploy pipeline. Run manually until a `FLY_API_TOKEN` secret is added:
 
 ```bash
 # Deploy from repo root (fly.toml is at root)
-cd promptsurge/
 ~/.fly/bin/flyctl deploy --remote-only
 
-# Apply pending migrations before or after deploy
+# Apply pending migrations
 cd apps/api && npx prisma migrate deploy
 ```
+
+## Manual deployment commands
+
+Use these as fallback or for one-off deploys.
 
 ### Admin panel
 
@@ -141,4 +154,4 @@ npx vercel --prod
 - The marketing site is fully static (`○` in Next.js build output) — all pages prerendered at build time. No server-side rendering, no API calls. CDN-cached by Vercel Edge.
 - The admin panel uses `force-dynamic` on data pages. Vercel Edge Functions handle SSR.
 - The API uses Fly.io with `auto_stop_machines = true` and `min_machines_running = 0` — machines sleep when idle and cold-start on demand.
-- **M8.5 TODO:** Replace `SODIUM_PRIVATE_KEY` env var with AWS KMS for production (M8.5-1). The env-var fallback is intentionally retained for `NODE_ENV=development`.
+- LLM keys (`LLM_KEY_ENCRYPTION_PRIVATE`/`LLM_KEY_ENCRYPTION_PUBLIC`) are stored as Fly.io secrets (encrypted at rest). No external KMS is needed at current scale.
