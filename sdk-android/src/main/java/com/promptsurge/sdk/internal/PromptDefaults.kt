@@ -50,4 +50,5 @@ internal data class PromptText(
     val ctaDismiss: String,
     val imageUrl: String? = null,
     val theme: DialogTheme? = null,
+    val promptNumber: Int? = null,
 )

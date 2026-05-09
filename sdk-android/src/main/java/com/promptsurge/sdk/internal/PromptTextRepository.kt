@@ -148,7 +148,8 @@ internal class PromptTextRepository internal constructor(
         val imageUrl = prefs.getString(KEY_IMAGE_URL, null)
         val themeJson = prefs.getString(KEY_THEME, null)
         val theme = themeJson?.let { runCatching { json.decodeFromString(DialogTheme.serializer(), it) }.getOrNull() }
-        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme)
+        val promptNumber = prefs.getInt(KEY_PROMPT_NUMBER, -1).takeIf { it >= 0 }
+        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme, promptNumber)
     }
 
     private fun writeCache(requestedLocale: String, text: PromptText, now: Long) {
@@ -161,6 +162,7 @@ internal class PromptTextRepository internal constructor(
             putString(KEY_CTA_DISMISS, text.ctaDismiss)
             if (text.imageUrl != null) putString(KEY_IMAGE_URL, text.imageUrl) else remove(KEY_IMAGE_URL)
             if (text.theme != null) putString(KEY_THEME, json.encodeToString(DialogTheme.serializer(), text.theme)) else remove(KEY_THEME)
+            if (text.promptNumber != null) putInt(KEY_PROMPT_NUMBER, text.promptNumber) else remove(KEY_PROMPT_NUMBER)
             putLong(KEY_CACHED_AT, now)
             apply()
         }
@@ -177,6 +179,7 @@ internal class PromptTextRepository internal constructor(
             ctaDismiss = parsed.ctaDismiss,
             imageUrl = parsed.imageUrl,
             theme = parsed.theme,
+            promptNumber = parsed.promptNumber,
         )
     }
 
@@ -200,6 +203,7 @@ internal class PromptTextRepository internal constructor(
         val ctaDismiss: String,
         val imageUrl: String? = null,
         val theme: DialogTheme? = null,
+        val promptNumber: Int? = null,
     )
 
     private data class CachedPrompt(
@@ -226,6 +230,7 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_IMAGE_URL = "image_url"
         private const val KEY_APP_DELETED = "app_deleted"
         private const val KEY_THEME = "dialog_theme"
+        private const val KEY_PROMPT_NUMBER = "prompt_number"
 
         internal const val DEFAULT_TTL_MS: Long = 24L * 60 * 60 * 1000
 

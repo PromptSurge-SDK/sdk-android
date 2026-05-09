@@ -112,7 +112,10 @@ object PromptSurge {
 
         val text: PromptText = promptRepo?.getCachedOrDefaults()
             ?: com.promptsurge.sdk.internal.PromptDefaults.asPromptText()
-        val localePayload = buildJsonObject { put("resolvedLocale", text.locale) }
+        val localePayload = buildJsonObject {
+            put("resolvedLocale", text.locale)
+            text.promptNumber?.let { put("servedPromptNumber", it) }
+        }
 
         PrePromptDialogFragment.listener = object : PrePromptDialogFragment.DialogListener {
             override val title: String = text.title
