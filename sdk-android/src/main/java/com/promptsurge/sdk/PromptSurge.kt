@@ -21,6 +21,8 @@ import kotlinx.serialization.json.put
 object PromptSurge {
 
     private const val TAG = "PromptSurge"
+    private const val OPT_OUT_PREFS = "ps_opt_out"
+    private const val OPT_OUT_KEY = "opted_out"
 
     // TODO(M4): validate apiKey against backend on first initialize()
     private var apiKey: String? = null
@@ -73,6 +75,11 @@ object PromptSurge {
     fun requestReview(activity: FragmentActivity) {
         val ctx = appContext ?: run {
             Log.e(TAG, "requestReview() called before initialize() — ignoring.")
+            return
+        }
+
+        if (isOptedOut(ctx)) {
+            Log.d(TAG, "requestReview: user opted out, skipping.")
             return
         }
 
@@ -153,6 +160,33 @@ object PromptSurge {
     }
 
     /**
+     * Opt this user out of all PromptSurge pre-prompt dialogs permanently (until [optIn] is called).
+     * The preference is persisted across launches. Safe to call before [initialize].
+     *
+     * Use this to honour a user's explicit "don't ask me for reviews" preference.
+     */
+    fun optOut(context: Context) {
+        context.applicationContext
+            .getSharedPreferences(OPT_OUT_PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(OPT_OUT_KEY, true).apply()
+        Log.d(TAG, "User opted out of review prompts.")
+    }
+
+    /**
+     * Re-enable pre-prompt dialogs for this user after a previous [optOut] call.
+     */
+    fun optIn(context: Context) {
+        context.applicationContext
+            .getSharedPreferences(OPT_OUT_PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(OPT_OUT_KEY, false).apply()
+        Log.d(TAG, "User opted back in to review prompts.")
+    }
+
+    private fun isOptedOut(context: Context): Boolean =
+        context.getSharedPreferences(OPT_OUT_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(OPT_OUT_KEY, false)
+
+    /**
      * Override the device locale used to fetch prompt copy. Pass `null` to clear and revert
      * to `Locale.getDefault()`. Triggers a background refresh.
      *
@@ -176,7 +210,10 @@ object PromptSurge {
 
     /** Visible for testing only — resets all internal SDK state. */
     internal fun reset() {
-        appContext?.let { RateLimiter(it).reset() }
+        appContext?.let {
+            RateLimiter(it).reset()
+            it.getSharedPreferences(OPT_OUT_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        }
         telemetry?.bus()?.stop()
         telemetry?.resetFirstOpenForTesting()
         promptRepo?.resetForTesting()
