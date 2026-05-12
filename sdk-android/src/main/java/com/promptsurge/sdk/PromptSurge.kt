@@ -98,6 +98,24 @@ object PromptSurge {
         val manager = ReviewManagerFactory.create(ctx)
         val tel = telemetry
 
+        // Impression limit reached — skip pre-prompt, fire native IAR directly.
+        if (promptRepo?.isImpressionLimitExceeded() == true) {
+            Log.d(TAG, "requestReview: impression limit exceeded — skipping dialog, attempting native IAR.")
+            manager.requestReviewFlow().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    manager.launchReviewFlow(activity, task.result)
+                        .addOnCompleteListener {
+                            tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
+                            rateLimiter.recordShown()
+                        }
+                } else {
+                    Log.w(TAG, "requestReviewFlow (impression limit) failed: ${task.exception?.message}")
+                    rateLimiter.recordShown()
+                }
+            }
+            return
+        }
+
         // Holdout group — skip the pre-prompt dialog but still attempt the native IAR
         // so we can measure the natural review rate as a baseline.
         if (tel?.isInHoldout() == true) {

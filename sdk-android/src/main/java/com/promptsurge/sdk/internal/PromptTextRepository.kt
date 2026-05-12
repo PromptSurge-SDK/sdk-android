@@ -48,6 +48,9 @@ internal class PromptTextRepository internal constructor(
 
     /** Returns true if the server has signalled that this app has been deleted. */
     fun isAppDeleted(): Boolean = prefs.getBoolean(KEY_APP_DELETED, false)
+
+    /** Returns true if the impression limit for the current billing tier has been reached. */
+    fun isImpressionLimitExceeded(): Boolean = prefs.getBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false)
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -104,8 +107,14 @@ internal class PromptTextRepository internal constructor(
             Log.w(TAG, "App has been deleted server-side; pre-prompt will be suppressed.")
             return@withLock PromptDefaults.asPromptText() // caller checks isAppDeleted() before showing
         }
+        if (fetchResult.exceptionOrNull() is ImpressionLimitExceededException) {
+            prefs.edit().putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, true).apply()
+            Log.w(TAG, "Impression limit exceeded; pre-prompt will be suppressed, native IAR will fire directly.")
+            return@withLock PromptDefaults.asPromptText() // caller checks isImpressionLimitExceeded() before showing
+        }
         val fetched = fetchResult.getOrNull()
         if (fetched != null) {
+            prefs.edit().putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false).apply()
             writeCache(locale, fetched, now)
             memCache = CachedPrompt(locale, now, fetched)
             return@withLock fetched
@@ -229,6 +238,7 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_CACHED_AT = "cached_at"
         private const val KEY_IMAGE_URL = "image_url"
         private const val KEY_APP_DELETED = "app_deleted"
+        private const val KEY_IMPRESSION_LIMIT_EXCEEDED = "impression_limit_exceeded"
         private const val KEY_THEME = "dialog_theme"
         private const val KEY_PROMPT_NUMBER = "prompt_number"
 
@@ -257,6 +267,9 @@ internal class PromptTextRepository internal constructor(
 /** Thrown when the server responds 404 with error=app_deleted. */
 internal class AppDeletedException : Exception("app_deleted")
 
+/** Thrown when the server responds 402 — impression limit exceeded for current tier. */
+internal class ImpressionLimitExceededException : Exception("impression_limit_exceeded")
+
 internal class OkHttpGetClient(
     private val client: OkHttpClient,
     private val baseUrl: String,
@@ -274,6 +287,7 @@ internal class OkHttpGetClient(
                 val body = resp.body?.string() ?: ""
                 if (body.contains("app_deleted")) throw AppDeletedException()
             }
+            if (resp.code == 402) throw ImpressionLimitExceededException()
             if (!resp.isSuccessful) error("HTTP ${resp.code}")
             return resp.body?.string() ?: error("empty body")
         }
