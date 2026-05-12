@@ -85,6 +85,10 @@ The SDK handles everything else:
 
 Cooldowns are stored in `SharedPreferences`. They survive app restarts.
 
+## Impression limit behaviour
+
+Each PromptSurge plan includes a monthly impression cap. When your app exceeds its cap, the API returns `402`. In that case, `requestReview()` automatically suppresses the pre-prompt dialog and fires the Google Play In-App Review sheet directly — so users still get the native prompt, just without the custom pre-prompt. The flag is cleared automatically when the next billing period begins.
+
 ---
 
 ## Debug helpers
