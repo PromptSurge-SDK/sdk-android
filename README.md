@@ -30,11 +30,11 @@ Then add the SDK to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.promptsurge:promptsurge:sdk-android-0.1.0")
+    implementation("com.github.promptsurge:sdk-android:0.1.0")
 }
 ```
 
-Replace `0.1.0` with the [latest release tag](https://github.com/promptsurge/promptsurge/releases).
+Replace `0.1.0` with the [latest release tag](https://github.com/promptsurge/sdk-android/releases).
 
 ---
 
