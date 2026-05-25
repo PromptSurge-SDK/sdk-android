@@ -51,6 +51,14 @@ internal class PromptTextRepository internal constructor(
 
     /** Returns true if the impression limit for the current billing tier has been reached. */
     fun isImpressionLimitExceeded(): Boolean = prefs.getBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false)
+
+    /**
+     * Returns true while the app is in the mandatory warm-up phase (server signalled warmup:true
+     * on the last fetch). During warm-up, [PromptSurge.requestReview] fires native review directly
+     * without showing the pre-prompt dialog. The flag clears automatically once the server
+     * confirms the threshold has been crossed (warmup:false on the next fetch).
+     */
+    fun isWarmupActive(): Boolean = prefs.getBoolean(KEY_WARMUP_ACTIVE, false)
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -115,8 +123,15 @@ internal class PromptTextRepository internal constructor(
         val fetched = fetchResult.getOrNull()
         if (fetched != null) {
             prefs.edit().putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false).apply()
-            writeCache(locale, fetched, now)
-            memCache = CachedPrompt(locale, now, fetched)
+            // Persist warm-up state so requestReview() can read it synchronously.
+            // Clear flag when server confirms warm-up is complete (warmup=false).
+            prefs.edit().putBoolean(KEY_WARMUP_ACTIVE, fetched.warmup).apply()
+            // Do not cache warm-up responses — they must stay live so the threshold
+            // counter can advance and warm-up completion is detected on the next fetch.
+            if (!fetched.warmup) {
+                writeCache(locale, fetched, now)
+                memCache = CachedPrompt(locale, now, fetched)
+            }
             return@withLock fetched
         }
 
@@ -203,6 +218,11 @@ internal class PromptTextRepository internal constructor(
         prefs.edit().remove(KEY_APP_DELETED).apply()
     }
 
+    /** Test-only: clear the warmup_active flag. */
+    internal fun clearWarmupForTesting() {
+        prefs.edit().remove(KEY_WARMUP_ACTIVE).apply()
+    }
+
     @Serializable
     internal data class PromptResponse(
         val locale: String,
@@ -213,6 +233,8 @@ internal class PromptTextRepository internal constructor(
         val imageUrl: String? = null,
         val theme: DialogTheme? = null,
         val promptNumber: Int? = null,
+        /** True during the mandatory warm-up phase. SDK fires native review without dialog. */
+        val warmup: Boolean = false,
     )
 
     private data class CachedPrompt(
@@ -239,6 +261,7 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_IMAGE_URL = "image_url"
         private const val KEY_APP_DELETED = "app_deleted"
         private const val KEY_IMPRESSION_LIMIT_EXCEEDED = "impression_limit_exceeded"
+        private const val KEY_WARMUP_ACTIVE = "warmup_active"
         private const val KEY_THEME = "dialog_theme"
         private const val KEY_PROMPT_NUMBER = "prompt_number"
 

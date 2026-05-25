@@ -98,6 +98,25 @@ object PromptSurge {
         val manager = ReviewManagerFactory.create(ctx)
         val tel = telemetry
 
+        // Warm-up phase: app hasn't yet accumulated enough distinct-device events.
+        // Fire native review so the event is counted toward the threshold.
+        if (promptRepo?.isWarmupActive() == true) {
+            Log.d(TAG, "requestReview: warm-up phase — skipping dialog, firing native review for baseline.")
+            manager.requestReviewFlow().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    manager.launchReviewFlow(activity, task.result)
+                        .addOnCompleteListener {
+                            tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
+                            rateLimiter.recordShown()
+                        }
+                } else {
+                    Log.w(TAG, "requestReviewFlow (warmup) failed: ${task.exception?.message}")
+                    rateLimiter.recordShown()
+                }
+            }
+            return
+        }
+
         // Impression limit reached — skip pre-prompt, fire native IAR directly.
         if (promptRepo?.isImpressionLimitExceeded() == true) {
             Log.d(TAG, "requestReview: impression limit exceeded — skipping dialog, attempting native IAR.")
