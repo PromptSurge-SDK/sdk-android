@@ -126,13 +126,14 @@ internal class PromptTextRepository internal constructor(
             // Persist warm-up state so requestReview() can read it synchronously.
             // Clear flag when server confirms warm-up is complete (warmup=false).
             prefs.edit().putBoolean(KEY_WARMUP_ACTIVE, fetched.warmup).apply()
+            val promptText = fetched.toPromptText()
             // Do not cache warm-up responses — they must stay live so the threshold
             // counter can advance and warm-up completion is detected on the next fetch.
             if (!fetched.warmup) {
-                writeCache(locale, fetched, now)
-                memCache = CachedPrompt(locale, now, fetched)
+                writeCache(locale, promptText, now)
+                memCache = CachedPrompt(locale, now, promptText)
             }
-            return@withLock fetched
+            return@withLock promptText
         }
 
         readCacheForLocale(locale, now, requireFresh = false)?.let {
@@ -192,20 +193,21 @@ internal class PromptTextRepository internal constructor(
         }
     }
 
-    private suspend fun fetch(locale: String): PromptText = withContext(ioDispatcher) {
+    private suspend fun fetch(locale: String): PromptResponse = withContext(ioDispatcher) {
         val raw = httpClient.get("/v1/prompts?locale=${java.net.URLEncoder.encode(locale, "UTF-8")}")
-        val parsed = json.decodeFromString(PromptResponse.serializer(), raw)
-        PromptText(
-            locale = parsed.locale,
-            title = parsed.title,
-            body = parsed.body,
-            ctaConfirm = parsed.ctaConfirm,
-            ctaDismiss = parsed.ctaDismiss,
-            imageUrl = parsed.imageUrl,
-            theme = parsed.theme,
-            promptNumber = parsed.promptNumber,
-        )
+        json.decodeFromString(PromptResponse.serializer(), raw)
     }
+
+    private fun PromptResponse.toPromptText() = PromptText(
+        locale = locale,
+        title = title,
+        body = body,
+        ctaConfirm = ctaConfirm,
+        ctaDismiss = ctaDismiss,
+        imageUrl = imageUrl,
+        theme = theme,
+        promptNumber = promptNumber,
+    )
 
     /** Test-only: wipe everything (memory + disk). */
     internal fun resetForTesting() {
