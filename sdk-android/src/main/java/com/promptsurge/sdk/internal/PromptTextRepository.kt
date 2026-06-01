@@ -194,7 +194,18 @@ internal class PromptTextRepository internal constructor(
     }
 
     private suspend fun fetch(locale: String): PromptResponse = withContext(ioDispatcher) {
-        val raw = httpClient.get("/v1/prompts?locale=${java.net.URLEncoder.encode(locale, "UTF-8")}")
+        // appVersion drives per-version warm-up buckets server-side. Use the same value
+        // the SDK reports on events so the device counts line up. Older servers ignore it.
+        val version = try {
+            @Suppress("DEPRECATION")
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "unknown"
+        } catch (_: Exception) {
+            "unknown"
+        }
+        val raw = httpClient.get(
+            "/v1/prompts?locale=${java.net.URLEncoder.encode(locale, "UTF-8")}" +
+                "&appVersion=${java.net.URLEncoder.encode(version, "UTF-8")}",
+        )
         json.decodeFromString(PromptResponse.serializer(), raw)
     }
 
