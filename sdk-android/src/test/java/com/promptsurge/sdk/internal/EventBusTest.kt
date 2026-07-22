@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -131,6 +132,39 @@ class EventBusTest {
         assertEquals(2, (result as EventBus.FlushResult.Dropped).count)
         assertEquals(3, http.calls.get())
         assertEquals(0, b.queueSize())
+    }
+
+    @Test
+    fun `verifyToken is omitted from the batch when unset`() = runTest {
+        // The server declares verifyToken as .optional(), which rejects an explicit null - sending
+        // one would 400 every batch, so absence has to mean absence.
+        val http = FakeHttp(ArrayDeque(listOf(HttpResponse(success = true, code = 202))))
+        val b = bus(http, StandardTestDispatcher(testScheduler))
+        b.enqueue(makeEvent())
+
+        b.flushNow()
+        advanceUntilIdle()
+
+        assertFalse(
+            "batch must not carry a null verifyToken: ${http.lastBody}",
+            http.lastBody!!.contains("verifyToken"),
+        )
+    }
+
+    @Test
+    fun `verifyToken rides along with the batch when set`() = runTest {
+        val http = FakeHttp(ArrayDeque(listOf(HttpResponse(success = true, code = 202))))
+        val b = bus(http, StandardTestDispatcher(testScheduler))
+        b.verifyToken = "vt_abc123"
+        b.enqueue(makeEvent())
+
+        b.flushNow()
+        advanceUntilIdle()
+
+        assertTrue(
+            "expected verifyToken in ${http.lastBody}",
+            http.lastBody!!.contains("\"verifyToken\":\"vt_abc123\""),
+        )
     }
 
     @Test

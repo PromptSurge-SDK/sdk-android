@@ -149,11 +149,16 @@ internal class PrePromptDialogFragment : DialogFragment() {
         super.onResume()
         if (!shownEventFired) {
             shownEventFired = true
-            val resolved = PromptSurge.promptRepo?.getCachedOrDefaults()?.locale
-                ?: PromptDefaults.LOCALE
+            val served = PromptSurge.promptRepo?.getCachedOrDefaults()
             PromptSurge.telemetry?.fire(
                 EventTypes.PRE_PROMPT_SHOWN,
-                buildJsonObject { put("resolvedLocale", resolved) },
+                buildJsonObject {
+                    put("resolvedLocale", served?.locale ?: PromptDefaults.LOCALE)
+                    // pre_prompt_shown is the billable event and the denominator of every
+                    // conversion rate, so it needs the same attribution as confirm/dismiss.
+                    served?.promptNumber?.let { put("servedPromptNumber", it) }
+                    served?.promptId?.let { put("promptId", it) }
+                },
             )
             // Record the 90-day cooldown here rather than on a button tap. The dialog is
             // setCancelable(false), so a user who swipes the app away never taps either button;

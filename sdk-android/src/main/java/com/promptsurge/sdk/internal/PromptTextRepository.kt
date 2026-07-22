@@ -199,7 +199,8 @@ internal class PromptTextRepository internal constructor(
         val themeJson = prefs.getString(KEY_THEME, null)
         val theme = themeJson?.let { runCatching { json.decodeFromString(DialogTheme.serializer(), it) }.getOrNull() }
         val promptNumber = prefs.getInt(KEY_PROMPT_NUMBER, -1).takeIf { it >= 0 }
-        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme, promptNumber)
+        val promptId = prefs.getString(KEY_PROMPT_ID, null)
+        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme, promptNumber, promptId)
     }
 
     private fun writeCache(requestedLocale: String, text: PromptText, now: Long) {
@@ -213,6 +214,7 @@ internal class PromptTextRepository internal constructor(
             if (text.imageUrl != null) putString(KEY_IMAGE_URL, text.imageUrl) else remove(KEY_IMAGE_URL)
             if (text.theme != null) putString(KEY_THEME, json.encodeToString(DialogTheme.serializer(), text.theme)) else remove(KEY_THEME)
             if (text.promptNumber != null) putInt(KEY_PROMPT_NUMBER, text.promptNumber) else remove(KEY_PROMPT_NUMBER)
+            if (text.promptId != null) putString(KEY_PROMPT_ID, text.promptId) else remove(KEY_PROMPT_ID)
             putLong(KEY_CACHED_AT, now)
             apply()
         }
@@ -243,6 +245,7 @@ internal class PromptTextRepository internal constructor(
         imageUrl = imageUrl,
         theme = theme,
         promptNumber = promptNumber,
+        promptId = promptId,
     )
 
     /** Test-only: wipe everything (memory + disk). */
@@ -271,6 +274,7 @@ internal class PromptTextRepository internal constructor(
         val imageUrl: String? = null,
         val theme: DialogTheme? = null,
         val promptNumber: Int? = null,
+        val promptId: String? = null,
         /** True during the mandatory warm-up phase. SDK fires native review without dialog. */
         val warmup: Boolean = false,
     )
@@ -302,6 +306,7 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_WARMUP_ACTIVE = "warmup_active"
         private const val KEY_THEME = "dialog_theme"
         private const val KEY_PROMPT_NUMBER = "prompt_number"
+        private const val KEY_PROMPT_ID = "prompt_id"
 
         internal const val DEFAULT_TTL_MS: Long = 24L * 60 * 60 * 1000
 

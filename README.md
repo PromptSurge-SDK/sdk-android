@@ -30,11 +30,11 @@ Then add the SDK to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.promptsurge:sdk-android:1.1.0")
+    implementation("com.github.PromptSurge-SDK:sdk-android:1.1.0")
 }
 ```
 
-Replace `1.1.0` with the [latest release tag](https://github.com/promptsurge/sdk-android/releases).
+Replace `1.1.0` with the [latest release tag](https://github.com/PromptSurge-SDK/sdk-android/tags). CI tags the mirror from `VERSION_NAME` in `gradle.properties`, and never moves a tag that already exists.
 
 ---
 
@@ -144,6 +144,7 @@ The pre-prompt is informational — it does **not** gate the native review promp
 | Method | Description |
 |--------|-------------|
 | `PromptSurge.initialize(context, apiKey)` | Initialize the SDK. Call once. A blank key is rejected with a logged error and leaves the SDK uninitialized. |
+| `PromptSurge.initialize(context, apiKey, verifyToken)` | Same, plus the one-shot app-ownership token from the dashboard's Verify page. It rides along with the next event batch; remove it once the dashboard shows the app as verified. |
 | `PromptSurge.requestReview(activity)` | Show pre-prompt and, on confirm, launch Play review. Rate-limited internally. Safe to call from an async callback: a no-op if the activity is finishing, its state is already saved, or the dialog is already up. |
 | `PromptSurge.setLocaleOverride(locale)` | Force a locale for the prompt copy, or `null` to follow the device. |
 | `PromptSurge.optOut(context)` / `optIn(context)` | Honour a user's explicit "never ask me for reviews" preference. Persisted. |

@@ -27,9 +27,16 @@ internal data class EventDto(
     val payload: JsonObject = buildJsonObject {},
 )
 
+/**
+ * `verifyToken` is the one-shot app-ownership token generated in the admin panel. The server has
+ * accepted it on this endpoint all along, but no SDK ever sent one, so app verification was
+ * unreachable from every platform. Omitted from the JSON when null - the server's schema declares
+ * it `.optional()`, which rejects an explicit null.
+ */
 @Serializable
 internal data class EventBatchDto(
     @SerialName("events") val events: List<EventDto>,
+    @SerialName("verifyToken") val verifyToken: String? = null,
 )
 
 internal object EventTypes {

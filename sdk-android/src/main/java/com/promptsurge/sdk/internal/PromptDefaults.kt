@@ -51,4 +51,6 @@ internal data class PromptText(
     val imageUrl: String? = null,
     val theme: DialogTheme? = null,
     val promptNumber: Int? = null,
+    /** Id of the PromptText row the server served, echoed back on every event for A/B attribution. */
+    val promptId: String? = null,
 )

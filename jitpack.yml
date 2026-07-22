@@ -1,0 +1,8 @@
+# JitPack builds the PUBLIC MIRROR (PromptSurge-SDK/sdk-android), whose root is this
+# directory - not the monorepo root. This file therefore has to live here so that
+# 'git subtree split --prefix packages/sdk-android' carries it across; at the monorepo root it
+# was invisible to every build JitPack actually runs.
+jdk:
+  - openjdk17
+install:
+  - chmod +x gradlew && ./gradlew :sdk-android:assembleRelease :sdk-android:publishToMavenLocal

@@ -49,7 +49,14 @@ internal class EventBus internal constructor(
     private var scope: CoroutineScope? = null
     private var periodicJob: Job? = null
     private var lifecycleObserver: DefaultLifecycleObserver? = null
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    // explicitNulls = false: the batch's optional verifyToken must be omitted rather than sent
+    // as null, because the server's Zod schema declares it .optional(), which rejects null and
+    // would 400 the whole batch.
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
+
+    /** One-shot app-ownership token from the admin panel; attached to every batch while set. */
+    @Volatile var verifyToken: String? = null
 
     fun enqueue(event: EventDto) {
         synchronized(queue) {
@@ -123,7 +130,7 @@ internal class EventBus internal constructor(
         while (true) {
             attempt += 1
             val result = runCatching {
-                val body = json.encodeToString(EventBatchDto.serializer(), EventBatchDto(batch))
+                val body = json.encodeToString(EventBatchDto.serializer(), EventBatchDto(batch, verifyToken))
                 httpClient.post("/v1/events", body)
             }
             if (result.isSuccess && result.getOrNull()?.success == true) {

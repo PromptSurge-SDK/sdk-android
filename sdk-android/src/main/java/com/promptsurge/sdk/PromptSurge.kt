@@ -72,9 +72,14 @@ object PromptSurge {
      * A blank key is rejected outright: the SDK stays uninitialized and [requestReview] is a
      * no-op, rather than silently showing bundled English copy the developer never wrote.
      *
+     * @param verifyToken optional one-shot app-ownership token from the PromptSurge dashboard's
+     *   Verify page. It rides along with the next event batch and can be removed from your code
+     *   once the dashboard shows the app as verified.
+     *
      * @throws IllegalStateException if called a second time with a *different* API key.
      */
-    fun initialize(context: Context, apiKey: String) {
+    @JvmOverloads
+    fun initialize(context: Context, apiKey: String, verifyToken: String? = null) {
         val key = validateKey(apiKey) ?: return
         when {
             this.apiKey == null -> {
@@ -83,6 +88,7 @@ object PromptSurge {
                 PsLog.i(TAG, "Initialized.")
                 val tel = Telemetry.create(context, key)
                 this.telemetry = tel
+                verifyToken?.takeIf { it.isNotBlank() }?.let { tel.bus().verifyToken = it.trim() }
                 tel.fire(EventTypes.INITIALIZE)
                 tel.fireFirstOpenIfNeeded()
 
@@ -259,6 +265,9 @@ object PromptSurge {
         val localePayload = buildJsonObject {
             put("resolvedLocale", text.locale)
             text.promptNumber?.let { put("servedPromptNumber", it) }
+            // Only sent when the server actually served a row. Never invented, so the field
+            // lights up by itself the moment the server starts returning it.
+            text.promptId?.let { put("promptId", it) }
         }
 
         PrePromptDialogFragment.listener = object : PrePromptDialogFragment.DialogListener {
