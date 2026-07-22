@@ -5,6 +5,9 @@ plugins {
     id("maven-publish")
 }
 
+// Single source of truth: gradle.properties -> BuildConfig.SDK_VERSION and the Maven coordinate.
+val sdkVersion = project.findProperty("VERSION_NAME") as String? ?: "0.0.0-dev"
+
 android {
     namespace = "com.promptsurge.sdk"
     compileSdk = 34
@@ -20,7 +23,7 @@ android {
             "PROMPTSURGE_API_URL",
             "\"https://api.promptsurge.me\"",
         )
-        buildConfigField("String", "SDK_VERSION", "\"0.0.1\"")
+        buildConfigField("String", "SDK_VERSION", "\"$sdkVersion\"")
     }
 
     buildFeatures {
@@ -79,7 +82,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.promptsurge"
                 artifactId = "sdk-android"
-                version = project.findProperty("VERSION_NAME") as String? ?: "0.1.0"
+                version = sdkVersion
             }
         }
     }

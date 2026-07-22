@@ -1,7 +1,6 @@
 package com.promptsurge.sdk.internal
 
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -74,7 +73,7 @@ internal class EventBus internal constructor(
             while (isActive) {
                 delay(flushIntervalMs)
                 runCatching { flushNow() }.onFailure {
-                    Log.w(TAG, "Periodic flush failed: ${it.message}")
+                    PsLog.w(TAG, "Periodic flush failed: ${it.message}")
                 }
             }
         }
@@ -87,7 +86,7 @@ internal class EventBus internal constructor(
                         // App went to background → flush.
                         cs.launch {
                             runCatching { flushNow() }.onFailure {
-                                Log.w(TAG, "Background flush failed: ${it.message}")
+                                PsLog.w(TAG, "Background flush failed: ${it.message}")
                             }
                         }
                     }
@@ -131,9 +130,9 @@ internal class EventBus internal constructor(
                 return@withLock FlushResult.Sent(batch.size, attempt)
             }
             val errMsg = result.exceptionOrNull()?.message ?: result.getOrNull()?.errorMessage
-            Log.w(TAG, "Flush attempt $attempt failed: $errMsg")
+            PsLog.d(TAG, "Flush attempt $attempt failed: $errMsg")
             if (attempt >= MAX_ATTEMPTS) {
-                Log.w(TAG, "Dropping batch of ${batch.size} events after $MAX_ATTEMPTS attempts")
+                PsLog.w(TAG, "Dropping batch of ${batch.size} events after $MAX_ATTEMPTS attempts")
                 return@withLock FlushResult.Dropped(batch.size)
             }
             delay(backoffMs)

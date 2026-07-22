@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Fallback host theme for the pre-prompt dialog.
+
+      MaterialAlertDialogBuilder requires the *context* theme to be a Material descendant; on a
+      plain AppCompat, platform, or custom game theme it throws. Games - the SDK's target market -
+      commonly ship exactly such a theme, so the SDK cannot assume Material is present.
+
+      PrePromptDialogFragment uses the host's own context when the host theme is Material (so host
+      branding still applies), and wraps it in this theme only when it is not. Deliberately a full
+      theme rather than a ThemeOverlay: an overlay on top of a non-Material theme still leaves the
+      Material attributes unresolved, which is the crash we are avoiding.
+    -->
+    <style name="Theme.PromptSurge.MaterialDialogHost" parent="Theme.Material3.DayNight" />
+
+</resources>

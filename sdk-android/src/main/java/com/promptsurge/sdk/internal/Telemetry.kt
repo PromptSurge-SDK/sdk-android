@@ -6,8 +6,10 @@ import com.promptsurge.sdk.BuildConfig
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.UUID
 
 /**
@@ -36,7 +38,7 @@ internal class Telemetry private constructor(
             EventDto(
                 eventType = eventType,
                 eventId = UUID.randomUUID().toString(),
-                timestamp = Instant.now().toString(),
+                timestamp = nowIso8601(),
                 sessionId = sessionId,
                 deviceId = deviceId,
                 appVersion = appVersion,
@@ -68,6 +70,24 @@ internal class Telemetry private constructor(
     fun bus(): EventBus = bus
 
     companion object {
+        /**
+         * ISO-8601 UTC, matching what the server's Zod schema accepts
+         * (`z.string().datetime({ offset: true })`).
+         *
+         * Deliberately NOT `java.time.Instant`: `java.time` is API 26+, the SDK declares
+         * `minSdk 24`, and core-library desugaring is not enabled — so an `Instant.now()` here
+         * crashes the host app on launch on API 24/25, because this runs from `initialize()`.
+         * `SimpleDateFormat` is not thread-safe, hence the per-thread instance.
+         */
+        private val iso8601 = object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat =
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+        }
+
+        internal fun nowIso8601(): String = iso8601.get()!!.format(Date())
+
         private const val PREFS_NAME = "ps_telemetry"
         private const val KEY_FIRST_OPEN_FIRED = "first_open_fired"
         private const val KEY_HOLDOUT_ASSIGNED = "holdout_assigned"

@@ -1,7 +1,6 @@
 package com.promptsurge.sdk.internal
 
 import android.content.Context
-import android.util.Log
 import com.promptsurge.sdk.BuildConfig
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +48,17 @@ internal class PromptTextRepository internal constructor(
     /** Returns true if the server has signalled that this app has been deleted. */
     fun isAppDeleted(): Boolean = prefs.getBoolean(KEY_APP_DELETED, false)
 
+    /**
+     * True if the server rejected the API key (401/403) at any point this process.
+     *
+     * Deliberately in-memory rather than persisted, unlike [isAppDeleted]: a key can be fixed by
+     * a config change on the server side, and a persisted flag would keep the SDK dark on a
+     * device that is now perfectly fine. A fresh process re-tests the key on the first prefetch.
+     */
+    @Volatile private var unauthorized = false
+
+    fun isUnauthorized(): Boolean = unauthorized
+
     /** Returns true if the impression limit for the current billing tier has been reached. */
     fun isImpressionLimitExceeded(): Boolean = prefs.getBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false)
 
@@ -92,7 +102,7 @@ internal class PromptTextRepository internal constructor(
     fun prefetch() {
         CoroutineScope(SupervisorJob() + ioDispatcher).launch {
             runCatching { getCurrentText() }
-                .onFailure { Log.w(TAG, "prefetch failed: ${it.message}") }
+                .onFailure { PsLog.w(TAG, "prefetch failed: ${it.message}") }
         }
     }
 
@@ -110,19 +120,34 @@ internal class PromptTextRepository internal constructor(
         }
 
         val fetchResult = runCatching { fetch(locale) }
+        if (fetchResult.exceptionOrNull() is UnauthorizedException) {
+            unauthorized = true
+            PsLog.e(
+                TAG,
+                "The server rejected this API key (401/403). No pre-prompt will be shown. " +
+                    "Check the key in your PromptSurge dashboard is an Android key and is active.",
+            )
+            return@withLock PromptDefaults.asPromptText() // caller checks isUnauthorized() before showing
+        }
         if (fetchResult.exceptionOrNull() is AppDeletedException) {
             prefs.edit().putBoolean(KEY_APP_DELETED, true).apply()
-            Log.w(TAG, "App has been deleted server-side; pre-prompt will be suppressed.")
+            PsLog.w(TAG, "App has been deleted server-side; pre-prompt will be suppressed.")
             return@withLock PromptDefaults.asPromptText() // caller checks isAppDeleted() before showing
         }
         if (fetchResult.exceptionOrNull() is ImpressionLimitExceededException) {
             prefs.edit().putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, true).apply()
-            Log.w(TAG, "Impression limit exceeded; pre-prompt will be suppressed, native IAR will fire directly.")
+            PsLog.w(TAG, "Impression limit exceeded; pre-prompt will be suppressed, native IAR will fire directly.")
             return@withLock PromptDefaults.asPromptText() // caller checks isImpressionLimitExceeded() before showing
         }
         val fetched = fetchResult.getOrNull()
         if (fetched != null) {
-            prefs.edit().putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false).apply()
+            unauthorized = false
+            // Both suppressions clear on a 200: app_deleted used to be a one-way kill switch, so
+            // a single 404 during a deploy disabled the SDK on that install permanently.
+            prefs.edit()
+                .putBoolean(KEY_IMPRESSION_LIMIT_EXCEEDED, false)
+                .putBoolean(KEY_APP_DELETED, false)
+                .apply()
             // Persist warm-up state so requestReview() can read it synchronously.
             // Clear flag when server confirms warm-up is complete (warmup=false).
             prefs.edit().putBoolean(KEY_WARMUP_ACTIVE, fetched.warmup).apply()
@@ -137,17 +162,17 @@ internal class PromptTextRepository internal constructor(
         }
 
         readCacheForLocale(locale, now, requireFresh = false)?.let {
-            Log.w(TAG, "Live fetch failed; serving stale cache for locale=$locale")
+            PsLog.w(TAG, "Live fetch failed; serving stale cache for locale=$locale")
             memCache = CachedPrompt(locale, it.let { now }, it) // keep memCache in sync
             return@withLock it
         }
 
         readAnyCache()?.let {
-            Log.w(TAG, "Live fetch failed; no cache for $locale, serving last-known $it")
+            PsLog.w(TAG, "Live fetch failed; no cache for $locale, serving last-known $it")
             return@withLock it
         }
 
-        Log.w(TAG, "No cache and live fetch failed; serving bundled English defaults")
+        PsLog.w(TAG, "No cache and live fetch failed; serving bundled English defaults")
         return@withLock PromptDefaults.asPromptText()
     }
 
@@ -306,11 +331,21 @@ internal class AppDeletedException : Exception("app_deleted")
 /** Thrown when the server responds 402 — impression limit exceeded for current tier. */
 internal class ImpressionLimitExceededException : Exception("impression_limit_exceeded")
 
+/** Thrown when the server responds 401/403 — the API key is missing, wrong, or inactive. */
+internal class UnauthorizedException(code: Int) : Exception("unauthorized_$code")
+
+/** Shape of the server's error bodies: `{ "error": "app_deleted" }`. */
+@Serializable
+private data class ApiError(val error: String? = null)
+
 internal class OkHttpGetClient(
     private val client: OkHttpClient,
     private val baseUrl: String,
     private val apiKey: String,
 ) : PromptTextRepository.HttpClient {
+
+    private val json = Json { ignoreUnknownKeys = true }
+
     override suspend fun get(path: String): String {
         val url = baseUrl.trimEnd('/') + path
         val request = Request.Builder()
@@ -319,9 +354,13 @@ internal class OkHttpGetClient(
             .get()
             .build()
         client.newCall(request).execute().use { resp ->
+            if (resp.code == 401 || resp.code == 403) throw UnauthorizedException(resp.code)
             if (resp.code == 404) {
+                // Match the parsed `error` field, not a substring of the body: an unrelated 404
+                // whose body merely mentions the string used to permanently disable the SDK.
                 val body = resp.body?.string() ?: ""
-                if (body.contains("app_deleted")) throw AppDeletedException()
+                val parsed = runCatching { json.decodeFromString(ApiError.serializer(), body) }.getOrNull()
+                if (parsed?.error == "app_deleted") throw AppDeletedException()
             }
             if (resp.code == 402) throw ImpressionLimitExceededException()
             if (!resp.isSuccessful) error("HTTP ${resp.code}")

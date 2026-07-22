@@ -7,6 +7,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -134,6 +136,70 @@ class PromptTextRepositoryTest {
         val repo = newRepo()
         val out = repo.getCachedOrDefaults()
         assertEquals(PromptDefaults.TITLE, out.title)
+    }
+
+    @Test
+    fun `app_deleted suppression clears on the next successful fetch`() = runTest {
+        // A transient 404 during a deploy used to disable the SDK on that install permanently:
+        // the flag was written and no non-test code path ever cleared it.
+        val http = FakeHttp().apply { failWith = AppDeletedException() }
+        val repo = newRepo(http)
+        repo.getCurrentText()
+        assertTrue("app_deleted should be set after a 404", repo.isAppDeleted())
+
+        http.failWith = null
+        http.nextResponse = sample
+        fakeNow += 25L * 60 * 60 * 1000
+        repo.getCurrentText()
+        assertFalse("app_deleted must clear on the next 200", repo.isAppDeleted())
+    }
+
+    @Test
+    fun `impression limit suppression clears on the next successful fetch`() = runTest {
+        val http = FakeHttp().apply { failWith = ImpressionLimitExceededException() }
+        val repo = newRepo(http)
+        repo.getCurrentText()
+        assertTrue(repo.isImpressionLimitExceeded())
+
+        http.failWith = null
+        http.nextResponse = sample
+        fakeNow += 25L * 60 * 60 * 1000
+        repo.getCurrentText()
+        assertFalse(repo.isImpressionLimitExceeded())
+    }
+
+    @Test
+    fun `a rejected key is remembered for the process and clears on the next 200`() = runTest {
+        val http = FakeHttp().apply { failWith = UnauthorizedException(401) }
+        val repo = newRepo(http)
+        assertFalse(repo.isUnauthorized())
+
+        repo.getCurrentText()
+        assertTrue("a 401 must be visible to requestReview()", repo.isUnauthorized())
+
+        http.failWith = null
+        http.nextResponse = sample
+        fakeNow += 25L * 60 * 60 * 1000
+        repo.getCurrentText()
+        assertFalse(repo.isUnauthorized())
+    }
+
+    @Test
+    fun `a rejected key does not persist across process restarts`() = runTest {
+        val http = FakeHttp().apply { failWith = UnauthorizedException(403) }
+        val repo = newRepo(http)
+        repo.getCurrentText()
+        assertTrue(repo.isUnauthorized())
+
+        // A new repository instance stands in for a new process: the key may have been activated
+        // server-side since, so the SDK must be willing to try again.
+        val fresh = PromptTextRepository(
+            appContext = ctx,
+            httpClient = FakeHttp(),
+            clock = { fakeNow },
+            ioDispatcher = UnconfinedTestDispatcher(),
+        )
+        assertFalse(fresh.isUnauthorized())
     }
 
     @Test
