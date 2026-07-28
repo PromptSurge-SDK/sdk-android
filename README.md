@@ -160,5 +160,29 @@ The raw `ANDROID_ID` is never stored, transmitted, or logged, and hashing with y
 means the same device produces a different identifier in every app, so it cannot be used to
 correlate a user across apps. No advertising identifier is used anywhere.
 
-For Play Data Safety, this is a device or other ID, collected and transmitted, used for analytics,
-not linked to a user's identity, and not shared with third parties beyond PromptSurge.
+Alongside it, each event records which prompt step happened (`pre_prompt_shown`,
+`pre_prompt_confirmed`, `pre_prompt_dismissed`, `native_prompt_requested`, `initialize`,
+`first_open`), your app version, the SDK version, and the device locale. Nothing else. No
+advertising identifier is used anywhere.
+
+## Play Data Safety: what to declare
+
+You have to answer this questionnaire yourself, and the enforcement lands on you rather than on
+us, so here are the answers for what this SDK does. Declare these **in addition to** whatever the
+rest of your app collects.
+
+| Data type | Collected | Shared | Purpose | Linked to user | Optional |
+| --- | --- | --- | --- | --- | --- |
+| Device or other IDs | Yes | No | Analytics | **No** | No, required for the feature |
+| App activity &rsaquo; App interactions | Yes | No | Analytics | **No** | No, required for the feature |
+
+Notes that matter for the form:
+
+- **"Shared" is No.** The data goes to PromptSurge as your processor to run the feature you
+  integrated. It is not passed on to anyone else. Google's definition of sharing is transfer to a
+  *third party*, and a service provider acting on your instructions is not one.
+- **"Linked to the user" is No.** The identifier is a salted hash with no account, email, or
+  advertising ID attached to it.
+- **Encrypted in transit: Yes.** Every request is HTTPS.
+- **Data deletion:** contact PromptSurge; there is no in-app deletion flow to declare.
+- The SDK requests **no runtime permissions** and adds none to your manifest.
