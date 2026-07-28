@@ -133,9 +133,21 @@ with `isMinifyEnabled = true` on every CI run so those rules stay honest.
 
 ---
 
-## App Store policy note
+## What the two buttons do, and the policy line you must not cross
 
-The pre-prompt is informational — it does **not** gate the native review prompt on the user's sentiment. Both buttons ("Sure" and "Not now") lead to the same outcome: native prompt or neutral dismiss. This design preserves compatibility with Apple App Store rule 5.6.1 for the future iOS port.
+The pre-prompt asks first, and **only the confirm button opens the native review flow.** Tapping
+the dismiss button records a cooldown, fires a `pre_prompt_dismissed` event, and does not launch
+Play's in-app review. That is a deliberate product choice: a user who says "not now" is answering
+the question, and we do not hand them the rating sheet anyway.
+
+**This makes your copy the thing that carries the policy risk, so read this before you edit it.**
+The default copy is a plain call to action ("Leave a review?"). If you rewrite the four strings
+into a satisfaction question - "Are you enjoying the app?", "How are we doing?" - then the dialog
+stops being an ask and becomes a filter that routes only happy users to the store. That is the
+pattern Apple App Store rule 5.6.1 and Google Play's in-app review policy are about, and the
+consequence lands on your app's listing, not ours.
+
+Keep the copy a request to review. Do not make it a question about how the user feels.
 
 ---
 

@@ -19,10 +19,15 @@ internal data class DialogTheme(
  * with no network connectivity still shows reasonable English text.
  *
  * Not in `strings.xml` because these are SDK-internal — host apps shouldn't override them.
+ *
+ * The title is a call to action, not a satisfaction question, and must stay one: only the
+ * confirm button opens the review flow, so an "Are you enjoying...?" title would make this a
+ * sentiment filter (Apple 5.6.1, Google Play in-app review policy). Same rule for the seeded
+ * global prompts and for LLM-generated copy. See `docs/conventions.md`.
  */
 internal object PromptDefaults {
     const val LOCALE = "en"
-    const val TITLE = "Enjoying this app?"
+    const val TITLE = "Leave a review?"
     const val BODY = "Reviews help other people discover apps like this. Got a moment?"
     const val CTA_CONFIRM = "Sure"
     const val CTA_DISMISS = "Not now"

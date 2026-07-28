@@ -26,11 +26,18 @@ import kotlinx.serialization.json.put
  * Pre-prompt dialog shown before requesting a Play Store review.
  *
  * Design intent (do not change without reviewing App Store policy):
- * This dialog is purely informational — it does NOT gate the native review prompt on the user's
- * sentiment. Both buttons ("Sure" and "Not now") lead to the same outcome: the native prompt or
- * a neutral dismiss. There is no "Are you enjoying the app?" path that only shows the native
- * prompt to happy users. This design is intentional for Apple App Store rule 5.6.1 compatibility
- * so the eventual iOS port can reuse this exact UX without policy risk.
+ * The two buttons do NOT lead to the same outcome. "Sure" opens Play's in-app review flow;
+ * "Not now" records a cooldown and fires `pre_prompt_dismissed`, and no native sheet is shown.
+ * That asymmetry is a deliberate product decision (Fäden card 67, 2026-07-22): a user who says
+ * "not now" is answering the question, and firing the rating sheet at them anyway works against
+ * that answer.
+ *
+ * The consequence is that **the copy carries the policy risk.** With a call-to-action title
+ * ("Leave a review?") the dialog is an ordinary ask that the user can decline. With a
+ * satisfaction question ("Are you enjoying the app?") the same asymmetry becomes a sentiment
+ * filter routing only happy users to the store - the pattern Apple rule 5.6.1 and Google Play's
+ * in-app review policy address. Server-served copy must stay a call to action; see the
+ * generation rules in `apps/api/src/llm/system-prompts.ts`.
  */
 internal class PrePromptDialogFragment : DialogFragment() {
 
