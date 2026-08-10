@@ -76,6 +76,43 @@ The SDK handles everything else:
 
 ---
 
+## Nothing is showing and I do not know why
+
+The default level is **WARN**, so errors and warnings reach you — a rejected key, a spent impression
+cap and a deleted app all print. But **warm-up, holdout and the cooldowns are INFO**, and those are
+every reason a correctly wired integration shows nothing. The most confusing case is the quietest
+one, so ask for it:
+
+```kotlin
+PromptSurge.setLogLevel(PromptSurge.LogLevel.INFO)
+```
+
+Do that first. Then filter logcat for `PromptSurge`. In suppression order:
+
+| What you will see | What it means |
+|---|---|
+| `requestReview: the server rejected this API key (401/403)...` (error) | Always prints. Check the key is an **Android** key and is active. |
+| `App has been deleted server-side...` (warning) | Always prints. Restore the app in the dashboard to clear it. |
+| `Impression limit exceeded...` (warning) | Always prints. Plan cap spent; clears when the billing period rolls over. |
+| `requestReview: warm-up phase — skipping dialog, firing native review for baseline.` | **The one that catches every new integration.** See below. |
+| `requestReview: holdout group — skipping dialog, attempting native IAR.` | This device is in the 10% control group, for its lifetime. Try another device. |
+| *(cooldown)* nothing shown | Already shown (90 days) or dismissed (7 days) on this device. `clearRateLimitForTesting()` resets it. |
+
+In every one of these cases the **native** Play In-App Review sheet still fires. A missing
+pre-prompt does not mean nothing happened — and Play's own sheet is quota-limited and often shows
+nothing on a debug build, so an invisible native sheet is normal too.
+
+## Warm-up phase
+
+A brand-new app shows **no pre-prompt at all** until it has recorded **50 distinct devices** firing
+`native_prompt_requested`. Until then every `requestReview()` fires the Play In-App Review sheet
+directly, which is what builds the baseline the whole product measures lift against. Default mode is
+`once` — one warm-up for the app's lifetime, not per release.
+
+**A test device will never reach 50 on its own**, so this is the expected state during an
+integration rather than a bug. Turn it off for an app from its overview page in the dashboard
+(Warm-up control), or leave it on and watch it happen with `setLogLevel(PromptSurge.LogLevel.INFO)`.
+
 ## Rate-limit behaviour
 
 | Event | Cooldown |
