@@ -38,7 +38,7 @@ Replace `1.1.0` with the [latest release tag](https://github.com/PromptSurge-SDK
 
 ---
 
-## Integration — two lines of code
+## Integration - two lines of code
 
 ### 1. Initialize (once per process)
 
@@ -55,7 +55,7 @@ class MyApplication : Application() {
 }
 ```
 
-`initialize()` is idempotent — safe to call with the same key multiple times (e.g. on re-entry to the activity). Calling it with a *different* key throws `IllegalStateException`.
+`initialize()` is idempotent - safe to call with the same key multiple times (e.g. on re-entry to the activity). Calling it with a *different* key throws `IllegalStateException`.
 
 ### 2. Request a review
 
@@ -72,13 +72,13 @@ The SDK handles everything else:
 - Shows the pre-prompt dialog.
 - If the user taps **"Sure"**, launches the Google Play In-App Review sheet.
 - If the user taps **"Not now"**, dismisses with no action.
-- Rate-limits automatically — silent no-op if the dialog was shown in the last 90 days, or dismissed in the last 7 days.
+- Rate-limits automatically - silent no-op if the dialog was shown in the last 90 days, or dismissed in the last 7 days.
 
 ---
 
 ## Nothing is showing and I do not know why
 
-The default level is **WARN**, so errors and warnings reach you — a rejected key, a spent impression
+The default level is **WARN**, so errors and warnings reach you - a rejected key, a spent impression
 cap and a deleted app all print. But **warm-up, holdout and the cooldowns are INFO**, and those are
 every reason a correctly wired integration shows nothing. The most confusing case is the quietest
 one, so ask for it:
@@ -94,12 +94,12 @@ Do that first. Then filter logcat for `PromptSurge`. In suppression order:
 | `requestReview: the server rejected this API key (401/403)...` (error) | Always prints. Check the key is an **Android** key and is active. |
 | `App has been deleted server-side...` (warning) | Always prints. Restore the app in the dashboard to clear it. |
 | `Impression limit exceeded...` (warning) | Always prints. Plan cap spent; clears when the billing period rolls over. |
-| `requestReview: warm-up phase — skipping dialog, firing native review for baseline.` | **The one that catches every new integration.** See below. |
-| `requestReview: holdout group — skipping dialog, attempting native IAR.` | This device is in the 10% control group, for its lifetime. Try another device. |
+| `requestReview: warm-up phase - skipping dialog, firing native review for baseline.` | **The one that catches every new integration.** See below. |
+| `requestReview: holdout group - skipping dialog, attempting native IAR.` | This device is in the 10% control group, for its lifetime. Try another device. |
 | *(cooldown)* nothing shown | Already shown (90 days) or dismissed (7 days) on this device. `clearRateLimitForTesting()` resets it. |
 
 In every one of these cases the **native** Play In-App Review sheet still fires. A missing
-pre-prompt does not mean nothing happened — and Play's own sheet is quota-limited and often shows
+pre-prompt does not mean nothing happened - and Play's own sheet is quota-limited and often shows
 nothing on a debug build, so an invisible native sheet is normal too.
 
 ## Warm-up phase
@@ -107,7 +107,7 @@ nothing on a debug build, so an invisible native sheet is normal too.
 A brand-new app shows **no pre-prompt at all** until it has recorded **50 distinct devices** firing
 `native_prompt_requested`. Until then every `requestReview()` fires the Play In-App Review sheet
 directly, which is what builds the baseline the whole product measures lift against. Default mode is
-`once` — one warm-up for the app's lifetime, not per release.
+`once` - one warm-up for the app's lifetime, not per release.
 
 **A test device will never reach 50 on its own**, so this is the expected state during an
 integration rather than a bug. Turn it off for an app from its overview page in the dashboard
@@ -128,7 +128,7 @@ Cooldowns are stored in `SharedPreferences`. They survive app restarts.
 
 ## Impression limit behaviour
 
-Each PromptSurge plan includes a monthly impression cap. When your app exceeds its cap, the API returns `402`. In that case, `requestReview()` automatically suppresses the pre-prompt dialog and fires the Google Play In-App Review sheet directly — so users still get the native prompt, just without the custom pre-prompt. The flag is cleared automatically when the next billing period begins.
+Each PromptSurge plan includes a monthly impression cap. When your app exceeds its cap, the API returns `402`. In that case, `requestReview()` automatically suppresses the pre-prompt dialog and fires the Google Play In-App Review sheet directly - so users still get the native prompt, just without the custom pre-prompt. The flag is cleared automatically when the next billing period begins.
 
 ---
 
@@ -144,7 +144,7 @@ PromptSurge.setLogLevel(PromptSurge.LogLevel.DEBUG)
 
 Guard `clearRateLimitForTesting()` with `if (BuildConfig.DEBUG)` in production apps.
 
-Logging defaults to `WARN` — errors and warnings only, nothing on the happy path. Errors and
+Logging defaults to `WARN` - errors and warnings only, nothing on the happy path. Errors and
 warnings are never silenced by default, because the failure they report (a rejected API key) is
 otherwise invisible: the SDK would fall back to bundled English copy that looks like a working
 install. The SDK never logs your API key.
@@ -154,7 +154,7 @@ install. The SDK never logs your API key.
 ## Themes
 
 The dialog is built with Material 3. If your app's theme is a Material descendant, the dialog
-inherits it. If it is not — a plain AppCompat theme, a platform theme, or a custom game theme —
+inherits it. If it is not - a plain AppCompat theme, a platform theme, or a custom game theme -
 the SDK falls back to its own bundled Material theme instead of crashing. You do not need to
 change your app's theme to use the SDK.
 
