@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.assertEquals
@@ -199,15 +200,45 @@ class DeviceAssignmentTest {
     private fun prefs() = ApplicationProvider.getApplicationContext<Application>()
         .getSharedPreferences("ps_telemetry", android.content.Context.MODE_PRIVATE)
 
-    private fun telemetryWith(http: HttpClient, dispatcher: kotlinx.coroutines.CoroutineDispatcher) =
-        Telemetry.create(
+    /**
+     * Every bus handed to [Telemetry.create] below, so [telemetryTest] can stop it again.
+     *
+     * `Telemetry.create` calls `EventBus.start`, which launches a `while (isActive) { delay(...) }`
+     * periodic flush on the dispatcher it was given. When that dispatcher shares `runTest`'s
+     * scheduler, the loop never runs out of work in virtual time, so `runTest` advances the clock
+     * forever after the body returns and the test JVM hangs with no failure and no output. That
+     * is what happened to CI run 34366242349 (`Run Android unit tests`, over two hours, cancelled)
+     * and to a local `:sdk-android:test` before it. No other test in this module calls
+     * `Telemetry.create`, which is why nothing caught it earlier.
+     */
+    private val startedBuses = mutableListOf<EventBus>()
+
+    private fun telemetryWith(http: HttpClient, dispatcher: kotlinx.coroutines.CoroutineDispatcher): Telemetry {
+        val b = bus(http, dispatcher)
+        startedBuses += b
+        return Telemetry.create(
             ApplicationProvider.getApplicationContext(),
             apiKey = "ps_test",
-            busOverride = bus(http, dispatcher),
+            busOverride = b,
         )
+    }
+
+    /**
+     * `runTest` for the tests that build a [Telemetry]: stops the periodic flush loop before the
+     * body returns, in a `finally` so a failing assertion reports its failure instead of hanging.
+     * An `@After` would be too late - `runTest` drains the scheduler inside the test method.
+     */
+    private fun telemetryTest(body: suspend TestScope.() -> Unit) = runTest {
+        try {
+            body()
+        } finally {
+            startedBuses.forEach { it.stop() }
+            startedBuses.clear()
+        }
+    }
 
     @Test
-    fun `the server's answer is written to prefs`() = runTest {
+    fun `the server's answer is written to prefs`() = telemetryTest {
         prefs().edit().clear().commit()
         // Force the local flip to the treatment group so the server's `true` is a real change.
         prefs().edit().putBoolean("holdout_assigned", true).putBoolean("in_holdout", false).commit()
@@ -222,7 +253,7 @@ class DeviceAssignmentTest {
     }
 
     @Test
-    fun `the current session keeps the group it started in`() = runTest {
+    fun `the current session keeps the group it started in`() = telemetryTest {
         // The whole reason the adoption is deferred. `isInHoldout()` decides whether the
         // pre-prompt is shown; flipping it mid-session would split one session across two
         // experiences.
@@ -240,7 +271,7 @@ class DeviceAssignmentTest {
     }
 
     @Test
-    fun `the next session picks the server's group up`() = runTest {
+    fun `the next session picks the server's group up`() = telemetryTest {
         prefs().edit().clear().commit()
         prefs().edit().putBoolean("holdout_assigned", true).putBoolean("in_holdout", false).commit()
 
@@ -254,7 +285,7 @@ class DeviceAssignmentTest {
     }
 
     @Test
-    fun `a reinstalled device is put back in its first group`() = runTest {
+    fun `a reinstalled device is put back in its first group`() = telemetryTest {
         // The defect itself, end to end on this side of the wire. An uninstall clears the
         // prefs; the fresh install flips locally and lands in the treatment group; the server
         // still remembers the holdout assignment against the surviving deviceId. The session
@@ -271,7 +302,7 @@ class DeviceAssignmentTest {
     }
 
     @Test
-    fun `an unseen device keeps its local flip and no server marker`() = runTest {
+    fun `an unseen device keeps its local flip and no server marker`() = telemetryTest {
         // A first session on a device the server has never seen still has to work, and it must
         // not leave a marker claiming the server spoke.
         prefs().edit().clear().commit()
@@ -287,7 +318,7 @@ class DeviceAssignmentTest {
     }
 
     @Test
-    fun `events already queued still carry the group they were served under`() = runTest {
+    fun `events already queued still carry the group they were served under`() = telemetryTest {
         // `Event.holdout` records what the user actually experienced. The server does not
         // rewrite it and neither does the SDK; a batch sent after an assignment lands still
         // describes the session it came from.
