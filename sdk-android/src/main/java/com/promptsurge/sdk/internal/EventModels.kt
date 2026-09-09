@@ -39,6 +39,28 @@ internal data class EventBatchDto(
     @SerialName("verifyToken") val verifyToken: String? = null,
 )
 
+/**
+ * Card 349 phase 4: what `POST /v1/events` answers with.
+ *
+ * `assignment` is present only when the batch spoke for exactly one device AND the server had
+ * or could create a row for it. It is the group the SERVER remembers for a `deviceId` that
+ * survives a reinstall, and it is the whole point of the feature: app preferences do not
+ * survive an uninstall, so without this a reinstalling device flips the coin again and is
+ * counted in both groups under one id.
+ *
+ * `accepted` and `skipped` are parsed because they are there, not because anything reads them
+ * yet - `ignoreUnknownKeys` means a field the server adds later cannot break a flush.
+ */
+@Serializable
+internal data class EventBatchResponseDto(
+    val accepted: Int = 0,
+    val skipped: Int = 0,
+    val assignment: AssignmentDto? = null,
+)
+
+@Serializable
+internal data class AssignmentDto(val holdout: Boolean)
+
 internal object EventTypes {
     const val FIRST_OPEN = "first_open"
     const val INITIALIZE = "initialize"

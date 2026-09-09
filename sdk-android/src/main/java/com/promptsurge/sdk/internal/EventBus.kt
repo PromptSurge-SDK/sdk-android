@@ -58,6 +58,20 @@ internal class EventBus internal constructor(
     /** One-shot app-ownership token from the admin panel; attached to every batch while set. */
     @Volatile var verifyToken: String? = null
 
+    /**
+     * Card 349 phase 4. Called with the group the SERVER remembers for this device, once per
+     * successful flush that carried an assignment.
+     *
+     * It deliberately does NOT change the group this session is running in - [Telemetry] reads
+     * its value once at construction and keeps it for the life of the process, so a session
+     * cannot change behaviour halfway through and the events it emits stay faithful to what the
+     * user was actually served. The sink persists the answer; the NEXT session picks it up. That
+     * is the same rule the server's own `resolveAssignment` docstring states, and it is what
+     * closes the defect: the first session on a fresh install still flips locally, every later
+     * session - including every session after a reinstall - takes the server's memory.
+     */
+    @Volatile var onAssignment: ((Boolean) -> Unit)? = null
+
     fun enqueue(event: EventDto) {
         synchronized(queue) {
             if (queue.size >= MAX_QUEUE) {
@@ -134,6 +148,7 @@ internal class EventBus internal constructor(
                 httpClient.post("/v1/events", body)
             }
             if (result.isSuccess && result.getOrNull()?.success == true) {
+                applyAssignment(result.getOrNull()?.body)
                 return@withLock FlushResult.Sent(batch.size, attempt)
             }
             val errMsg = result.exceptionOrNull()?.message ?: result.getOrNull()?.errorMessage
@@ -146,6 +161,25 @@ internal class EventBus internal constructor(
             backoffMs *= 2
         }
         @Suppress("UNREACHABLE_CODE") FlushResult.Dropped(batch.size)
+    }
+
+    /**
+     * Parses `{ "assignment": { "holdout": true } }` off a 202 and hands it to [onAssignment].
+     *
+     * Every failure here is silent by design. A batch was already accepted by the time this
+     * runs, so a body that is missing, empty, truncated or shaped differently from what this
+     * version of the SDK expects must not turn a successful flush into a failed one - the SDK
+     * simply keeps its local group until the next batch.
+     */
+    private fun applyAssignment(body: String?) {
+        val sink = onAssignment ?: return
+        if (body.isNullOrBlank()) return
+        val holdout = runCatching {
+            json.decodeFromString(EventBatchResponseDto.serializer(), body).assignment?.holdout
+        }.getOrNull() ?: return
+        runCatching { sink(holdout) }.onFailure {
+            PsLog.w(TAG, "Assignment sink threw: ${it.message}")
+        }
     }
 
     sealed interface FlushResult {
@@ -182,7 +216,17 @@ internal interface HttpClient {
     suspend fun post(path: String, jsonBody: String): HttpResponse
 }
 
-internal data class HttpResponse(val success: Boolean, val code: Int, val errorMessage: String? = null)
+/**
+ * `body` is the response text, kept because card 349 phase 4 needs it: `POST /v1/events`
+ * answers 202 with the device's holdout assignment and the SDK had no way to read a body at
+ * all. Null on a transport failure and on any response this client did not manage to read.
+ */
+internal data class HttpResponse(
+    val success: Boolean,
+    val code: Int,
+    val errorMessage: String? = null,
+    val body: String? = null,
+)
 
 internal class OkHttpHttpClient(
     private val client: OkHttpClient,
@@ -200,10 +244,14 @@ internal class OkHttpHttpClient(
             .build()
         return try {
             client.newCall(request).execute().use { resp ->
+                // Read inside `use`: the body is a one-shot stream and is closed on exit.
+                // A body that cannot be read is not a failed flush - the events were accepted.
+                val body = runCatching { resp.body?.string() }.getOrNull()
                 HttpResponse(
                     success = resp.isSuccessful,
                     code = resp.code,
                     errorMessage = if (resp.isSuccessful) null else "HTTP ${resp.code}",
+                    body = body,
                 )
             }
         } catch (t: Throwable) {
