@@ -4,9 +4,8 @@ The version is `VERSION_NAME` in `gradle.properties` (it feeds `BuildConfig.SDK_
 Maven coordinate). CI tags the public mirror (`PromptSurge-SDK/sdk-android`) with it when it
 changes; tags are never moved.
 
-## Unreleased (proposed 1.2.0)
+## 1.2.0 - 2026-10-19
 
-Not released. `VERSION_NAME` is still `1.1.0` and no tag has moved.
 
 ### Changed
 
