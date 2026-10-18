@@ -32,10 +32,10 @@ import kotlinx.serialization.json.put
  * "not now" is answering the question, and firing the rating sheet at them anyway works against
  * that answer.
  *
- * The consequence is that **the copy carries the policy risk.** With a call-to-action title
- * ("Leave a review?") the dialog is an ordinary ask that the user can decline. With a
- * satisfaction question ("Are you enjoying the app?") the same asymmetry becomes a sentiment
- * filter routing only happy users to the store - the pattern Apple rule 5.6.1 and Google Play's
+ * The consequence is that **the copy carries the policy risk.** With a call to action (the
+ * default is the statement "A quick favor") the dialog is an ordinary ask that the user can
+ * decline. With a satisfaction question ("Are you enjoying the app?") the same asymmetry becomes
+ * a sentiment filter routing only happy users to the store - the pattern Apple rule 5.6.1 and Google Play's
  * in-app review policy address. Server-served copy must stay a call to action; see the
  * generation rules in `apps/api/src/llm/system-prompts.ts`.
  */
@@ -149,7 +149,7 @@ internal class PrePromptDialogFragment : DialogFragment() {
             // Message text color
             alertDialog.findViewById<TextView>(android.R.id.message)?.setTextColor(textColor)
         }
-        // Silently swallow any theming error — the dialog still shows with default styling.
+        // Silently swallow any theming error - the dialog still shows with default styling.
     }
 
     override fun onResume() {

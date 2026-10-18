@@ -2,14 +2,20 @@ package com.promptsurge.sdk
 
 import android.content.Context
 import androidx.fragment.app.FragmentActivity
+import com.google.android.play.core.review.ReviewManager
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.promptsurge.sdk.internal.EventTypes
 import com.promptsurge.sdk.internal.PromptText
 import com.promptsurge.sdk.internal.PromptTextRepository
 import com.promptsurge.sdk.internal.PsLog
 import com.promptsurge.sdk.internal.Telemetry
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Main entry point for the PromptSurge SDK.
@@ -24,11 +30,17 @@ object PromptSurge {
     private const val OPT_OUT_PREFS = "ps_opt_out"
     private const val OPT_OUT_KEY = "opted_out"
     private const val KEY_PREFIX = "ps_live_"
+    private const val DAY_MS = 24L * 60 * 60 * 1000
 
     private var apiKey: String? = null
     private var appContext: Context? = null
     @Volatile internal var telemetry: Telemetry? = null
     @Volatile internal var promptRepo: PromptTextRepository? = null
+
+    private val defaultReviewManagerFactory: (Context) -> ReviewManager = { ReviewManagerFactory.create(it) }
+
+    /** Builds the Play review client. A seam for the tests, which pass Play's own `FakeReviewManager`. */
+    @Volatile internal var reviewManagerFactory: (Context) -> ReviewManager = defaultReviewManagerFactory
 
     /** How much the SDK logs. See [setLogLevel]. */
     enum class LogLevel {
@@ -49,7 +61,7 @@ object PromptSurge {
     }
 
     /**
-     * Set how much the SDK logs. Defaults to [LogLevel.WARN] — errors and warnings only.
+     * Set how much the SDK logs. Defaults to [LogLevel.WARN] - errors and warnings only.
      *
      * Raise it to [LogLevel.INFO] or [LogLevel.DEBUG] while integrating to see why a pre-prompt
      * did or did not appear. The SDK never logs the API key.
@@ -97,7 +109,7 @@ object PromptSurge {
                 repo.prefetch()
             }
             this.apiKey == key -> {
-                PsLog.w(TAG, "initialize() called again with the same key — ignoring.")
+                PsLog.w(TAG, "initialize() called again with the same key - ignoring.")
             }
             else -> {
                 throw IllegalStateException(
@@ -110,7 +122,7 @@ object PromptSurge {
 
     /**
      * Returns the key to use, or null if it is unusable. Whitespace is trimmed rather than
-     * rejected — a key pasted out of a web page with a trailing newline is a typo, not a
+     * rejected - a key pasted out of a web page with a trailing newline is a typo, not a
      * different key, and failing it would send the integrator hunting server-side.
      */
     private fun validateKey(apiKey: String): String? {
@@ -118,14 +130,14 @@ object PromptSurge {
         if (trimmed.isEmpty()) {
             PsLog.e(
                 TAG,
-                "initialize() was given a blank API key — the SDK is NOT initialized and no " +
+                "initialize() was given a blank API key - the SDK is NOT initialized and no " +
                     "pre-prompt will be shown. Pass the key from your PromptSurge dashboard " +
                     "(it starts with \"$KEY_PREFIX\").",
             )
             return null
         }
         if (trimmed != apiKey) {
-            PsLog.w(TAG, "API key had leading/trailing whitespace — trimmed.")
+            PsLog.w(TAG, "API key had leading/trailing whitespace - trimmed.")
         }
         if (!trimmed.startsWith(KEY_PREFIX)) {
             PsLog.w(
@@ -144,12 +156,14 @@ object PromptSurge {
      *  - [initialize] has not been called yet.
      *  - The user was shown the dialog within the last 90 days.
      *  - The user dismissed ("Not now") within the last 7 days.
+     *  - The SDK asked Play for the review flow within the last 30 days. Play may show nothing
+     *    when asked again that soon, so neither the dialog nor the native call happens.
      */
     fun requestReview(activity: FragmentActivity) {
         val ctx = appContext ?: run {
             PsLog.e(
                 TAG,
-                "requestReview() called before initialize() — ignoring. Call " +
+                "requestReview() called before initialize() - ignoring. Call " +
                     "PromptSurge.initialize(context, apiKey) from Application.onCreate().",
             )
             return
@@ -183,7 +197,7 @@ object PromptSurge {
             return
         }
 
-        // API key was rejected by the server this session — showing bundled English copy in that
+        // API key was rejected by the server this session - showing bundled English copy in that
         // state hides a broken install behind something that looks like it works.
         if (promptRepo?.isUnauthorized() == true) {
             PsLog.e(
@@ -195,68 +209,50 @@ object PromptSurge {
             return
         }
 
-        // App was soft-deleted server-side — suppress pre-prompt entirely.
+        // App was soft-deleted server-side - suppress pre-prompt entirely.
         if (promptRepo?.isAppDeleted() == true) {
             PsLog.i(TAG, "requestReview: app deleted server-side, suppressing pre-prompt.")
             return
         }
 
-        val manager = ReviewManagerFactory.create(ctx)
+        // Google Play's own quota, checked before anything below can reach the review API. A
+        // "Sure" that opens nothing is the failure both stores warn about, so when the quota is
+        // spent there is no pre-prompt AND no native call. Deliberately ahead of the warm-up,
+        // impression-limit and holdout branches: both arms of the experiment skip under the same
+        // rule, so neither one is credited with requests Play would not have shown (card 615).
+        rateLimiter.quotaBlockedUntil()?.let { next ->
+            PsLog.i(
+                TAG,
+                "requestReview: the SDK already asked Google Play for the review flow in the " +
+                    "last ${RateLimiter.NATIVE_REQUEST_WINDOW_MS / DAY_MS} days, and Play may show " +
+                    "nothing when asked again that soon, so there is no pre-prompt and no native " +
+                    "request this time. Next request possible after ${formatUtc(next)}.",
+            )
+            return
+        }
+
         val tel = telemetry
 
         // Warm-up phase: app hasn't yet accumulated enough distinct-device events.
         // Fire native review so the event is counted toward the threshold.
         if (promptRepo?.isWarmupActive() == true) {
-            PsLog.i(TAG, "requestReview: warm-up phase — skipping dialog, firing native review for baseline.")
-            manager.requestReviewFlow().addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    manager.launchReviewFlow(activity, task.result)
-                        .addOnCompleteListener {
-                            tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
-                            rateLimiter.recordShown()
-                        }
-                } else {
-                    PsLog.w(TAG, "requestReviewFlow (warmup) failed: ${task.exception?.message}")
-                    rateLimiter.recordShown()
-                }
-            }
+            PsLog.i(TAG, "requestReview: warm-up phase - skipping dialog, firing native review for baseline.")
+            launchNativeReview(activity, ctx, rateLimiter, "warmup")
             return
         }
 
-        // Impression limit reached — skip pre-prompt, fire native IAR directly.
+        // Impression limit reached - skip pre-prompt, fire native IAR directly.
         if (promptRepo?.isImpressionLimitExceeded() == true) {
-            PsLog.i(TAG, "requestReview: impression limit exceeded — skipping dialog, attempting native IAR.")
-            manager.requestReviewFlow().addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    manager.launchReviewFlow(activity, task.result)
-                        .addOnCompleteListener {
-                            tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
-                            rateLimiter.recordShown()
-                        }
-                } else {
-                    PsLog.w(TAG, "requestReviewFlow (impression limit) failed: ${task.exception?.message}")
-                    rateLimiter.recordShown()
-                }
-            }
+            PsLog.i(TAG, "requestReview: impression limit exceeded - skipping dialog, attempting native IAR.")
+            launchNativeReview(activity, ctx, rateLimiter, "impression limit")
             return
         }
 
-        // Holdout group — skip the pre-prompt dialog but still attempt the native IAR
+        // Holdout group - skip the pre-prompt dialog but still attempt the native IAR
         // so we can measure the natural review rate as a baseline.
         if (tel?.isInHoldout() == true) {
-            PsLog.i(TAG, "requestReview: holdout group — skipping dialog, attempting native IAR.")
-            manager.requestReviewFlow().addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    manager.launchReviewFlow(activity, task.result)
-                        .addOnCompleteListener {
-                            tel.fire(EventTypes.NATIVE_PROMPT_REQUESTED)
-                            rateLimiter.recordShown()
-                        }
-                } else {
-                    PsLog.w(TAG, "requestReviewFlow (holdout) failed: ${task.exception?.message}")
-                    rateLimiter.recordShown()
-                }
-            }
+            PsLog.i(TAG, "requestReview: holdout group - skipping dialog, attempting native IAR.")
+            launchNativeReview(activity, ctx, rateLimiter, "holdout")
             return
         }
 
@@ -278,19 +274,8 @@ object PromptSurge {
 
             override fun onConfirmed(activity: FragmentActivity) {
                 tel?.fire(EventTypes.PRE_PROMPT_CONFIRMED, localePayload)
-                manager.requestReviewFlow().addOnCompleteListener { requestTask ->
-                    if (requestTask.isSuccessful) {
-                        manager.launchReviewFlow(activity, requestTask.result)
-                            .addOnCompleteListener {
-                                tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED, localePayload)
-                                rateLimiter.recordShown()
-                                PrePromptDialogFragment.listener = null
-                            }
-                    } else {
-                        PsLog.w(TAG, "requestReviewFlow failed: ${requestTask.exception?.message}")
-                        rateLimiter.recordShown()
-                        PrePromptDialogFragment.listener = null
-                    }
+                launchNativeReview(activity, ctx, rateLimiter, "confirm", localePayload) {
+                    PrePromptDialogFragment.listener = null
                 }
             }
 
@@ -304,6 +289,47 @@ object PromptSurge {
         PrePromptDialogFragment.newInstance()
             .show(activity.supportFragmentManager, PrePromptDialogFragment.TAG)
     }
+
+    /**
+     * The one place the SDK asks Play for the review flow: the confirm path, warm-up, the
+     * impression limit and holdout all come through here, so the quota record cannot miss one.
+     *
+     * The request is recorded the moment the SDK asks, whether or not Play then shows anything:
+     * Play does not say, so the count of requests is all the SDK can hold the quota against.
+     * The 90-day cooldown and `native_prompt_requested` keep their old timing.
+     */
+    private fun launchNativeReview(
+        activity: FragmentActivity,
+        ctx: Context,
+        rateLimiter: RateLimiter,
+        reason: String,
+        payload: JsonObject = buildJsonObject {},
+        onDone: () -> Unit = {},
+    ) {
+        rateLimiter.recordNativeRequest()
+        val manager = reviewManagerFactory(ctx)
+        val tel = telemetry
+        manager.requestReviewFlow().addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                manager.launchReviewFlow(activity, task.result)
+                    .addOnCompleteListener {
+                        tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED, payload)
+                        rateLimiter.recordShown()
+                        onDone()
+                    }
+            } else {
+                PsLog.w(TAG, "requestReviewFlow ($reason) failed: ${task.exception?.message}")
+                rateLimiter.recordShown()
+                onDone()
+            }
+        }
+    }
+
+    /** UTC, second precision, without java.time (minSdk 24). Only for log lines. */
+    private fun formatUtc(epochMs: Long): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
+            .format(Date(epochMs))
 
     /**
      * Opt this user out of all PromptSurge pre-prompt dialogs permanently (until [optIn] is called).
@@ -346,7 +372,8 @@ object PromptSurge {
     }
 
     /**
-     * Clear the rate-limit timestamps so the pre-prompt can be shown again immediately.
+     * Clear the rate-limit timestamps, and the record of native review requests the 30-day Play
+     * quota check reads, so the pre-prompt can be shown again immediately.
      *
      * Intended for debug builds and UI testing only. Do not call in production.
      */
@@ -354,7 +381,7 @@ object PromptSurge {
         appContext?.let { RateLimiter(it).reset() }
     }
 
-    /** Visible for testing only — resets all internal SDK state. */
+    /** Visible for testing only - resets all internal SDK state. */
     internal fun reset() {
         appContext?.let {
             RateLimiter(it).reset()
@@ -367,6 +394,7 @@ object PromptSurge {
         promptRepo = null
         apiKey = null
         appContext = null
+        reviewManagerFactory = defaultReviewManagerFactory
         PrePromptDialogFragment.listener = null
     }
 }

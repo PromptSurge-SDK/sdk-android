@@ -73,14 +73,15 @@ The SDK handles everything else:
 - If the user taps **"Sure"**, launches the Google Play In-App Review sheet.
 - If the user taps **"Not now"**, dismisses with no action.
 - Rate-limits automatically - silent no-op if the dialog was shown in the last 90 days, or dismissed in the last 7 days.
+- Respects Play's review quota - silent no-op if the SDK asked Play for the review flow in the last 30 days (see below).
 
 ---
 
 ## Nothing is showing and I do not know why
 
 The default level is **WARN**, so errors and warnings reach you - a rejected key, a spent impression
-cap and a deleted app all print. But **warm-up, holdout and the cooldowns are INFO**, and those are
-every reason a correctly wired integration shows nothing. The most confusing case is the quietest
+cap and a deleted app all print. But **warm-up, holdout, the cooldowns and the Play review quota are
+INFO**, and those are every reason a correctly wired integration shows nothing. The most confusing case is the quietest
 one, so ask for it:
 
 ```kotlin
@@ -96,11 +97,13 @@ Do that first. Then filter logcat for `PromptSurge`. In suppression order:
 | `Impression limit exceeded...` (warning) | Always prints. Plan cap spent; clears when the billing period rolls over. |
 | `requestReview: warm-up phase - skipping dialog, firing native review for baseline.` | **The one that catches every new integration.** See below. |
 | `requestReview: holdout group - skipping dialog, attempting native IAR.` | This device is in the 10% control group, for its lifetime. Try another device. |
-| *(cooldown)* nothing shown | Already shown (90 days) or dismissed (7 days) on this device. `clearRateLimitForTesting()` resets it. |
+| `requestReview: rate-limited, skipping.` | Already shown (90 days) or dismissed (7 days) on this device. `clearRateLimitForTesting()` resets it. |
+| `requestReview: the SDK already asked Google Play for the review flow in the last 30 days...` | Play's review quota (below). The line ends with the date the next request becomes possible. `clearRateLimitForTesting()` resets it too. |
 
-In every one of these cases the **native** Play In-App Review sheet still fires. A missing
-pre-prompt does not mean nothing happened - and Play's own sheet is quota-limited and often shows
-nothing on a debug build, so an invisible native sheet is normal too.
+In the warm-up, impression-limit and holdout cases the **native** Play In-App Review flow is still
+requested, so a missing pre-prompt does not mean nothing happened - and Play's own sheet is
+quota-limited and often shows nothing on a debug build, so an invisible native sheet is normal too.
+In the review-quota case nothing is requested at all, on purpose.
 
 ## Warm-up phase
 
@@ -126,6 +129,24 @@ left that user eligible again immediately, forever.
 
 Cooldowns are stored in `SharedPreferences`. They survive app restarts.
 
+## Play review quota
+
+Google does not publish the In-App Review quota. Its guide says that calling the flow more than
+once within a short period (for example, less than a month) may not show a dialog, and Play never
+tells the app whether it showed one. So a "Sure" could be answered by nothing, which is what both
+stores warn about when an app puts a button in front of the review API.
+
+The SDK therefore records every review flow it requests (the confirm path, warm-up, the
+impression limit, holdout) in the same `SharedPreferences` as the cooldowns, and **within 30 days
+of one it shows no pre-prompt and requests no review flow** on that `requestReview()` call. No
+impression is recorded; one INFO line says why and when the next request becomes possible.
+Holdout and warm-up devices are held to the same rule, so both sides of the lift comparison skip
+under the same condition.
+
+Today the 90-day cooldown already spaces this SDK's requests further apart than 30 days, so on
+Android the quota check is the floor under that rule rather than a new limit. It cannot see review
+flows your app launches itself; if you have your own, they share Play's budget.
+
 ## Impression limit behaviour
 
 Each PromptSurge plan includes a monthly impression cap. When your app exceeds its cap, the API returns `402`. In that case, `requestReview()` automatically suppresses the pre-prompt dialog and fires the Google Play In-App Review sheet directly - so users still get the native prompt, just without the custom pre-prompt. The flag is cleared automatically when the next billing period begins.
@@ -135,7 +156,8 @@ Each PromptSurge plan includes a monthly impression cap. When your app exceeds i
 ## Debug helpers
 
 ```kotlin
-// Clear all rate-limit state so you can test the flow repeatedly:
+// Clear all rate-limit state (both cooldowns and the review-quota record) so you can test the
+// flow repeatedly:
 PromptSurge.clearRateLimitForTesting()
 
 // See why a pre-prompt did or did not appear:
@@ -178,11 +200,24 @@ Play's in-app review. That is a deliberate product choice: a user who says "not 
 the question, and we do not hand them the rating sheet anyway.
 
 **This makes your copy the thing that carries the policy risk, so read this before you edit it.**
-The default copy is a plain call to action ("Leave a review?"). If you rewrite the four strings
-into a satisfaction question - "Are you enjoying the app?", "How are we doing?" - then the dialog
-stops being an ask and becomes a filter that routes only happy users to the store. That is the
-pattern Apple App Store rule 5.6.1 and Google Play's in-app review policy are about, and the
-consequence lands on your app's listing, not ours.
+The bundled default is a statement, not a question, and it is the same on all three SDKs and on
+the server's own fallback:
+
+| Field | Default |
+|---|---|
+| Title | A quick favor |
+| Body | A short review helps other people discover apps like this. |
+| Confirm | Sure |
+| Dismiss | Not now |
+
+It asks nothing, because Google's in-app review guidance says an app should not ask the user any
+questions before or while presenting the rating button or card, and the buttons already carry the
+choice. Copy you set in the dashboard replaces it.
+
+If you rewrite the four strings into a satisfaction question - "Are you enjoying the app?", "How
+are we doing?" - then the dialog stops being an ask and becomes a filter that routes only happy
+users to the store. That is the pattern Apple App Store rule 5.6.1 and Google Play's in-app review
+policy are about, and the consequence lands on your app's listing, not ours.
 
 Keep the copy a request to review. Do not make it a question about how the user feels.
 
@@ -198,7 +233,20 @@ Keep the copy a request to review. Do not make it a question about how the user 
 | `PromptSurge.setLocaleOverride(locale)` | Force a locale for the prompt copy, or `null` to follow the device. |
 | `PromptSurge.optOut(context)` / `optIn(context)` | Honour a user's explicit "never ask me for reviews" preference. Persisted. |
 | `PromptSurge.setLogLevel(level)` | `NONE`, `ERROR`, `WARN` (default), `INFO`, `DEBUG`. |
-| `PromptSurge.clearRateLimitForTesting()` | Reset cooldown timestamps. Debug only. |
+| `PromptSurge.clearRateLimitForTesting()` | Reset the cooldown timestamps and the review-quota record. Debug only. |
+
+---
+
+## Store review notes
+
+Play has no reviewer-notes field for the in-app review flow. If the same app also ships on iOS,
+App Review sees the pre-prompt in front of the rating sheet; paste this into App Store Connect,
+under the app's version, **App Review Information > Notes**, with `[action]` replaced by the moment
+you call `requestReview` (and your own button labels if you changed them):
+
+```
+After a user completes [action], the app shows a short request to leave a review. Tapping Sure opens the system rating sheet; tapping Not now closes it. The app never asks how the user feels and never collects a rating itself.
+```
 
 ---
 
