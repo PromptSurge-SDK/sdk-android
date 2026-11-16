@@ -39,6 +39,9 @@ object PromptSurge {
 
     private val defaultReviewManagerFactory: (Context) -> ReviewManager = { ReviewManagerFactory.create(it) }
 
+    /** Monotonic milliseconds for the time-away measurement. A seam for the tests. */
+    @Volatile internal var clock: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+
     /** Builds the Play review client. A seam for the tests, which pass Play's own `FakeReviewManager`. */
     @Volatile internal var reviewManagerFactory: (Context) -> ReviewManager = defaultReviewManagerFactory
 
@@ -237,14 +240,14 @@ object PromptSurge {
         // Fire native review so the event is counted toward the threshold.
         if (promptRepo?.isWarmupActive() == true) {
             PsLog.i(TAG, "requestReview: warm-up phase - skipping dialog, firing native review for baseline.")
-            launchNativeReview(activity, ctx, rateLimiter, "warmup")
+            launchNativeReview(activity, ctx, rateLimiter, "warmup", source = "warmup")
             return
         }
 
         // Impression limit reached - skip pre-prompt, fire native IAR directly.
         if (promptRepo?.isImpressionLimitExceeded() == true) {
             PsLog.i(TAG, "requestReview: impression limit exceeded - skipping dialog, attempting native IAR.")
-            launchNativeReview(activity, ctx, rateLimiter, "impression limit")
+            launchNativeReview(activity, ctx, rateLimiter, "impression limit", source = "impression_limit")
             return
         }
 
@@ -252,7 +255,7 @@ object PromptSurge {
         // so we can measure the natural review rate as a baseline.
         if (tel?.isInHoldout() == true) {
             PsLog.i(TAG, "requestReview: holdout group - skipping dialog, attempting native IAR.")
-            launchNativeReview(activity, ctx, rateLimiter, "holdout")
+            launchNativeReview(activity, ctx, rateLimiter, "holdout", source = "holdout")
             return
         }
 
@@ -271,10 +274,14 @@ object PromptSurge {
             override val body: String = text.body
             override val ctaConfirm: String = text.ctaConfirm
             override val ctaDismiss: String = text.ctaDismiss
+            override val notice: Boolean = text.notice
 
             override fun onConfirmed(activity: FragmentActivity) {
+                // In notice mode this also runs when the dialog is closed any other way (back,
+                // tap outside): the notice announces the sheet, it does not ask (card 833).
                 tel?.fire(EventTypes.PRE_PROMPT_CONFIRMED, localePayload)
-                launchNativeReview(activity, ctx, rateLimiter, "confirm", localePayload) {
+                val source = if (text.notice) "notice" else "confirm"
+                launchNativeReview(activity, ctx, rateLimiter, source, localePayload, source) {
                     PrePromptDialogFragment.listener = null
                 }
             }
@@ -304,6 +311,7 @@ object PromptSurge {
         rateLimiter: RateLimiter,
         reason: String,
         payload: JsonObject = buildJsonObject {},
+        source: String = reason,
         onDone: () -> Unit = {},
     ) {
         rateLimiter.recordNativeRequest()
@@ -311,9 +319,22 @@ object PromptSurge {
         val tel = telemetry
         manager.requestReviewFlow().addOnCompleteListener { task ->
             if (task.isSuccessful) {
+                val launchedAt = clock()
                 manager.launchReviewFlow(activity, task.result)
                     .addOnCompleteListener {
                         tel?.fire(EventTypes.NATIVE_PROMPT_REQUESTED, payload)
+                        // Play completes the flow the same way whether its sheet appeared, was
+                        // rated or was closed; how long that took is all an app can observe.
+                        // A second or more means a sheet was really on screen (card 833).
+                        val awayMs = (clock() - launchedAt).coerceAtLeast(0L)
+                        tel?.fire(
+                            EventTypes.NATIVE_SHEET_CLOSED,
+                            buildJsonObject {
+                                payload.forEach { (k, v) -> put(k, v) }
+                                put("awayMs", awayMs)
+                                put("source", source)
+                            },
+                        )
                         rateLimiter.recordShown()
                         onDone()
                     }
@@ -395,6 +416,7 @@ object PromptSurge {
         apiKey = null
         appContext = null
         reviewManagerFactory = defaultReviewManagerFactory
+        clock = { android.os.SystemClock.elapsedRealtime() }
         PrePromptDialogFragment.listener = null
     }
 }

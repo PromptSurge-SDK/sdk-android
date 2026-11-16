@@ -4,6 +4,21 @@ The version is `VERSION_NAME` in `gradle.properties` (it feeds `BuildConfig.SDK_
 Maven coordinate). CI tags the public mirror (`PromptSurge-SDK/sdk-android`) with it when it
 changes; tags are never moved.
 
+## 1.3.0 - 2026-11-16
+
+### Added
+
+- **"Announce only" pre-prompt (card 833).** The SDK now tells the server it can draw a one-button
+  notice (`notice=1` on `/v1/prompts`). When the app is set to "Announce only" in the PromptSurge
+  console, the server answers `mode: "notice"` and the dialog shows ONE button (`ctaConfirm`); the
+  button, back and a tap outside all lead to Play's review flow, and no `pre_prompt_dismissed` is
+  sent. Apps left on the default "Ask first" see no change. The store-limit guard still decides
+  first: when Play would likely show nothing, there is no notice either.
+- **`native_sheet_closed { awayMs, source }`.** Play completes its review flow the same way
+  whether the card appeared, was rated or was closed, so the SDK reports how long the flow took
+  (`launchReviewFlow` until completion). A second or more means the card was on screen. Sent on
+  every path that asks Play (confirm, notice, warm-up, holdout, impression limit).
+
 ## 1.2.0 - 2026-10-19
 
 

@@ -67,10 +67,19 @@ internal class PrePromptDialogFragment : DialogFragment() {
             .setPositiveButton(cfg.ctaConfirm) { _, _ ->
                 (requireActivity() as? FragmentActivity)?.let { listener?.onConfirmed(it) }
             }
-            .setNegativeButton(cfg.ctaDismiss) { _, _ ->
-                listener?.onDismissed()
-            }
-            .setCancelable(false)
+
+        if (cfg.notice) {
+            // "Announce only" (card 833): one button, and closing the dialog any other way (back,
+            // tap outside) leads to the store's sheet too - see onCancel. No "Not now".
+            isCancelable = true
+            builder.setCancelable(true)
+        } else {
+            builder
+                .setNegativeButton(cfg.ctaDismiss) { _, _ ->
+                    listener?.onDismissed()
+                }
+                .setCancelable(false)
+        }
 
         // When an imageUrl is available, add a header image above the dialog content.
         if (!imageUrl.isNullOrBlank()) {
@@ -113,6 +122,17 @@ internal class PrePromptDialogFragment : DialogFragment() {
         return ContextThemeWrapper(ctx, R.style.Theme_PromptSurge_MaterialDialogHost)
     }
 
+    /**
+     * Back or a tap outside. In notice mode that leads to the store's sheet like the button does
+     * (card 833). In ask mode it does what it always did: nothing is recorded.
+     */
+    override fun onCancel(dialog: DialogInterface) {
+        super.onCancel(dialog)
+        if (listener?.notice == true) {
+            activity?.let { listener?.onConfirmed(it) }
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         val theme = PromptSurge.promptRepo?.getCachedOrDefaults()?.theme ?: return
@@ -139,7 +159,7 @@ internal class PrePromptDialogFragment : DialogFragment() {
                 setBackgroundColor(accentColor)
             }
 
-            // Negative button: text-only in accent color
+            // Negative button: text-only in accent color (absent in notice mode)
             alertDialog.getButton(DialogInterface.BUTTON_NEGATIVE)?.setTextColor(accentColor)
 
             // Title text color
@@ -179,6 +199,7 @@ internal class PrePromptDialogFragment : DialogFragment() {
         val body: String get() = PromptDefaults.BODY
         val ctaConfirm: String get() = PromptDefaults.CTA_CONFIRM
         val ctaDismiss: String get() = PromptDefaults.CTA_DISMISS
+        val notice: Boolean get() = false
         fun onConfirmed(activity: FragmentActivity)
         fun onDismissed()
     }

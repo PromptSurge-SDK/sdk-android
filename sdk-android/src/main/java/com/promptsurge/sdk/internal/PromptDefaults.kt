@@ -63,4 +63,9 @@ internal data class PromptText(
     val promptNumber: Int? = null,
     /** Id of the PromptText row the server served, echoed back on every event for A/B attribution. */
     val promptId: String? = null,
+    /**
+     * True when the server answered `mode: "notice"` (card 833): draw ONE button and request the
+     * store's sheet however the dialog closes. False is the two-button ask.
+     */
+    val notice: Boolean = false,
 )

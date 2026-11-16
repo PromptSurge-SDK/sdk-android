@@ -60,4 +60,48 @@ class PrePromptDialogFragmentTest {
 
         assertFalse("showing the dialog must start the cooldown", limiter.canShow())
     }
+
+    // ── Card 833: "announce only" ─────────────────────────────────────────────────────────
+
+    private class Recorder(override val notice: Boolean) : PrePromptDialogFragment.DialogListener {
+        var confirmed = 0
+        var dismissed = 0
+        override fun onConfirmed(activity: FragmentActivity) { confirmed += 1 }
+        override fun onDismissed() { dismissed += 1 }
+    }
+
+    private fun show(listener: Recorder): Pair<PrePromptDialogFragment, androidx.appcompat.app.AlertDialog> {
+        PrePromptDialogFragment.listener = listener
+        val controller = launchActivity()
+        val fragment = PrePromptDialogFragment.newInstance()
+        fragment.show(controller.get().supportFragmentManager, PrePromptDialogFragment.TAG)
+        controller.get().supportFragmentManager.executePendingTransactions()
+        return fragment to (fragment.dialog as androidx.appcompat.app.AlertDialog)
+    }
+
+    @Test
+    fun `notice mode draws one button and no Not now`() {
+        val (_, dialog) = show(Recorder(notice = true))
+        val positive = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+        val negative = dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE)
+        assertTrue(positive.visibility == android.view.View.VISIBLE)
+        assertTrue("no second button in notice mode", negative == null || negative.visibility != android.view.View.VISIBLE)
+    }
+
+    @Test
+    fun `closing the notice with back leads to the sheet, never to a dismissal`() {
+        val rec = Recorder(notice = true)
+        val (_, dialog) = show(rec)
+        dialog.cancel()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        org.junit.Assert.assertEquals(1, rec.confirmed)
+        org.junit.Assert.assertEquals(0, rec.dismissed)
+    }
+
+    @Test
+    fun `ask mode keeps both buttons`() {
+        val (_, dialog) = show(Recorder(notice = false))
+        val negative = dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE)
+        assertTrue(negative != null && negative.visibility == android.view.View.VISIBLE)
+    }
 }

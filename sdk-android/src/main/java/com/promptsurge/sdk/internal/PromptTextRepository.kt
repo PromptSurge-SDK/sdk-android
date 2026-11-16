@@ -200,7 +200,8 @@ internal class PromptTextRepository internal constructor(
         val theme = themeJson?.let { runCatching { json.decodeFromString(DialogTheme.serializer(), it) }.getOrNull() }
         val promptNumber = prefs.getInt(KEY_PROMPT_NUMBER, -1).takeIf { it >= 0 }
         val promptId = prefs.getString(KEY_PROMPT_ID, null)
-        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme, promptNumber, promptId)
+        val notice = prefs.getBoolean(KEY_NOTICE, false)
+        return PromptText(resolved, title, body, ctaConfirm, ctaDismiss, imageUrl, theme, promptNumber, promptId, notice)
     }
 
     private fun writeCache(requestedLocale: String, text: PromptText, now: Long) {
@@ -215,6 +216,7 @@ internal class PromptTextRepository internal constructor(
             if (text.theme != null) putString(KEY_THEME, json.encodeToString(DialogTheme.serializer(), text.theme)) else remove(KEY_THEME)
             if (text.promptNumber != null) putInt(KEY_PROMPT_NUMBER, text.promptNumber) else remove(KEY_PROMPT_NUMBER)
             if (text.promptId != null) putString(KEY_PROMPT_ID, text.promptId) else remove(KEY_PROMPT_ID)
+            putBoolean(KEY_NOTICE, text.notice)
             putLong(KEY_CACHED_AT, now)
             apply()
         }
@@ -231,7 +233,10 @@ internal class PromptTextRepository internal constructor(
         }
         val raw = httpClient.get(
             "/v1/prompts?locale=${java.net.URLEncoder.encode(locale, "UTF-8")}" +
-                "&appVersion=${java.net.URLEncoder.encode(version, "UTF-8")}",
+                "&appVersion=${java.net.URLEncoder.encode(version, "UTF-8")}" +
+                // This SDK can draw the one-button notice (card 833). Without it, an app in notice
+                // mode is answered with the warm-up shape: no dialog, straight to the store's sheet.
+                "&notice=1",
         )
         json.decodeFromString(PromptResponse.serializer(), raw)
     }
@@ -246,6 +251,7 @@ internal class PromptTextRepository internal constructor(
         theme = theme,
         promptNumber = promptNumber,
         promptId = promptId,
+        notice = mode == MODE_NOTICE,
     )
 
     /** Test-only: wipe everything (memory + disk). */
@@ -277,6 +283,8 @@ internal class PromptTextRepository internal constructor(
         val promptId: String? = null,
         /** True during the mandatory warm-up phase. SDK fires native review without dialog. */
         val warmup: Boolean = false,
+        /** "ask" (two buttons) or "notice" (one button). Older servers omit it: ask. */
+        val mode: String? = null,
     )
 
     private data class CachedPrompt(
@@ -304,6 +312,8 @@ internal class PromptTextRepository internal constructor(
         private const val KEY_APP_DELETED = "app_deleted"
         private const val KEY_IMPRESSION_LIMIT_EXCEEDED = "impression_limit_exceeded"
         private const val KEY_WARMUP_ACTIVE = "warmup_active"
+        private const val KEY_NOTICE = "notice"
+        internal const val MODE_NOTICE = "notice"
         private const val KEY_THEME = "dialog_theme"
         private const val KEY_PROMPT_NUMBER = "prompt_number"
         private const val KEY_PROMPT_ID = "prompt_id"

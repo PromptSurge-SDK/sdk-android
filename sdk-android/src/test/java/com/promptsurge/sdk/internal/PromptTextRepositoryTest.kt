@@ -213,4 +213,33 @@ class PromptTextRepositoryTest {
             "expected request path to include locale=ja, got ${http.lastPath}"
         }
     }
+
+    // ── Card 833: "announce only" ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `asks for the notice and reads mode notice, also from the disk cache`() = runTest {
+        val http = FakeHttp().apply {
+            nextResponse = """{"locale":"de","title":"T","body":"B","ctaConfirm":"Weiter","ctaDismiss":"x","mode":"notice"}"""
+        }
+        val out = newRepo(http).getCurrentText()
+        assertTrue("this SDK draws the notice, so it must say so", http.lastPath!!.contains("&notice=1"))
+        assertTrue(out.notice)
+
+        val offline = FakeHttp().apply { failWith = RuntimeException("offline") }
+        val cached = PromptTextRepository(
+            appContext = ctx,
+            httpClient = offline,
+            clock = { fakeNow + 5_000L },
+            ioDispatcher = UnconfinedTestDispatcher(),
+            ttlMs = 24L * 60 * 60 * 1000,
+        ).getCurrentText()
+        assertTrue("the mode survives the disk cache", cached.notice)
+    }
+
+    @Test
+    fun `no mode or mode ask is the two-button ask`() = runTest {
+        assertFalse(newRepo(FakeHttp().apply { nextResponse = sample }).getCurrentText().notice)
+        val ask = """{"locale":"de","title":"T","body":"B","ctaConfirm":"Ja","ctaDismiss":"Nein","mode":"ask"}"""
+        assertFalse(newRepo(FakeHttp().apply { nextResponse = ask }).getCurrentText().notice)
+    }
 }

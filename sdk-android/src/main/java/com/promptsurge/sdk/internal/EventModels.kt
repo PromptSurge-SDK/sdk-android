@@ -68,4 +68,7 @@ internal object EventTypes {
     const val PRE_PROMPT_CONFIRMED = "pre_prompt_confirmed"
     const val PRE_PROMPT_DISMISSED = "pre_prompt_dismissed"
     const val NATIVE_PROMPT_REQUESTED = "native_prompt_requested"
+
+    /** Card 833: how long the app was away after asking Play for the review flow (`awayMs`). */
+    const val NATIVE_SHEET_CLOSED = "native_sheet_closed"
 }

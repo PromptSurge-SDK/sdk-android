@@ -36,11 +36,11 @@ Then add the SDK to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.PromptSurge-SDK:sdk-android:1.2.0")
+    implementation("com.github.PromptSurge-SDK:sdk-android:1.3.0")
 }
 ```
 
-Replace `1.2.0` with the [latest release tag](https://github.com/PromptSurge-SDK/sdk-android/tags). CI tags the mirror from `VERSION_NAME` in `gradle.properties`, and never moves a tag that already exists.
+Replace `1.3.0` with the [latest release tag](https://github.com/PromptSurge-SDK/sdk-android/tags). CI tags the mirror from `VERSION_NAME` in `gradle.properties`, and never moves a tag that already exists.
 
 ---
 
