@@ -1,6 +1,12 @@
 # PromptSurge Android SDK
 
-Adds a polished pre-prompt dialog before the Google Play In-App Review flow, increasing tap-through rates without violating App Store policies.
+Adds a pre-prompt dialog before the Google Play In-App Review flow: a short request for a review, shown at the moment your code chooses. A yes requests Play's own review card; a not-now closes the dialog.
+
+## Using an AI coding assistant
+
+Claude, ChatGPT, Gemini or Grok can do this integration for you. The prompt to paste is at
+<https://promptsurge.me/en/ai-assistants>, and the guide the assistant should read is one plain text
+file: <https://promptsurge.me/llms-full.txt>. Creating the account and copying the API key stay with you.
 
 ---
 
@@ -34,7 +40,7 @@ dependencies {
 }
 ```
 
-Replace `1.1.0` with the [latest release tag](https://github.com/PromptSurge-SDK/sdk-android/tags). CI tags the mirror from `VERSION_NAME` in `gradle.properties`, and never moves a tag that already exists.
+Replace `1.2.0` with the [latest release tag](https://github.com/PromptSurge-SDK/sdk-android/tags). CI tags the mirror from `VERSION_NAME` in `gradle.properties`, and never moves a tag that already exists.
 
 ---
 
@@ -228,7 +234,7 @@ Keep the copy a request to review. Do not make it a question about how the user 
 | Method | Description |
 |--------|-------------|
 | `PromptSurge.initialize(context, apiKey)` | Initialize the SDK. Call once. A blank key is rejected with a logged error and leaves the SDK uninitialized. |
-| `PromptSurge.initialize(context, apiKey, verifyToken)` | Same, plus the one-shot app-ownership token from the dashboard's Verify page. It rides along with the next event batch; remove it once the dashboard shows the app as verified. |
+| `PromptSurge.initialize(context, apiKey, verifyToken)` | Same, plus the one-shot app-ownership token from the dashboard's Verify page (SDK 1.1.0 and later). It rides along with the next event batch; remove it once the dashboard shows the app as verified. |
 | `PromptSurge.requestReview(activity)` | Show pre-prompt and, on confirm, launch Play review. Rate-limited internally. Safe to call from an async callback: a no-op if the activity is finishing, its state is already saved, or the dialog is already up. |
 | `PromptSurge.setLocaleOverride(locale)` | Force a locale for the prompt copy, or `null` to follow the device. |
 | `PromptSurge.optOut(context)` / `optIn(context)` | Honour a user's explicit "never ask me for reviews" preference. Persisted. |
@@ -245,7 +251,7 @@ under the app's version, **App Review Information > Notes**, with `[action]` rep
 you call `requestReview` (and your own button labels if you changed them):
 
 ```
-After a user completes [action], the app shows a short request to leave a review. Tapping Sure opens the system rating sheet; tapping Not now closes it. The app never asks how the user feels and never collects a rating itself.
+After a user completes [action], the app shows a short request to leave a review. Tapping Sure requests the system rating sheet (Google Play In-App Review); tapping Not now closes it. The app never asks how the user feels and never collects a rating itself.
 ```
 
 ---
