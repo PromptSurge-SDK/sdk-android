@@ -4,6 +4,13 @@ The version is `VERSION_NAME` in `gradle.properties` (it feeds `BuildConfig.SDK_
 Maven coordinate). CI tags the public mirror (`PromptSurge-SDK/sdk-android`) with it when it
 changes; tags are never moved.
 
+## 1.3.1 - 2026-11-16
+
+### Changed
+
+- **The single button of an "Announce only" pre-prompt is centred.** In 1.3.0 it sat at the right
+  edge, where Material puts the confirming button of a pair. "Ask first" dialogs are unchanged.
+
 ## 1.3.0 - 2026-11-16
 
 ### Added

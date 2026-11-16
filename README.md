@@ -36,7 +36,7 @@ Then add the SDK to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.PromptSurge-SDK:sdk-android:1.3.0")
+    implementation("com.github.PromptSurge-SDK:sdk-android:1.3.1")
 }
 ```
 

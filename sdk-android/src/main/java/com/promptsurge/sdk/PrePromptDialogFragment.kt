@@ -8,10 +8,14 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.LinearLayoutCompat
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
 import coil.load
@@ -133,8 +137,31 @@ internal class PrePromptDialogFragment : DialogFragment() {
         }
     }
 
+    /**
+     * A single button sits in the middle (operator, 2026-11-16): alone at the right edge it looks
+     * like half of a pair. The button bar keeps an invisible spacer that pushes buttons to the end;
+     * with the spacer gone and the bar centred, the one button is centred at its natural width.
+     * Never throws: a layout this cannot read keeps the platform's own placement.
+     */
+    private fun centerSingleButton() {
+        runCatching {
+            val button = (dialog as? AlertDialog)?.getButton(DialogInterface.BUTTON_POSITIVE) ?: return
+            val bar = button.parent as? ViewGroup ?: return
+            for (i in 0 until bar.childCount) {
+                val child = bar.getChildAt(i)
+                if (child !== button) child.visibility = View.GONE
+            }
+            when (bar) {
+                is LinearLayoutCompat -> bar.gravity = Gravity.CENTER
+                is LinearLayout -> bar.gravity = Gravity.CENTER
+                else -> Unit
+            }
+        }
+    }
+
     override fun onStart() {
         super.onStart()
+        if (listener?.notice == true) centerSingleButton()
         val theme = PromptSurge.promptRepo?.getCachedOrDefaults()?.theme ?: return
         if (theme.presetId == "default") return
 
